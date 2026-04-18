@@ -1034,6 +1034,8 @@ tbody tr:hover { background: var(--surface); }
 
 <script src="novus-core.js"></script>
 <script>
+  // Redirect to login if not authenticated
+if (!requireAuth()) throw new Error('Not authenticated');
 'use strict';
 
 /* ── Mermaid ── */

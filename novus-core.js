@@ -71,28 +71,62 @@ const NovusAuth = (() => {
 // ══════════════════════════════════════════════════════════════
 const NovusDB = (() => {
 
+  // ── Get JWT safely ────────────────────────────────────────
+  function jwt() {
+    const token = NovusAuth.getJWT();
+    if (!token) {
+      window.location.href = 'login.html';
+      return null;
+    }
+    return token;
+  }
+
+  // ── REST headers ──────────────────────────────────────────
+  function headers(extraPrefer) {
+    const token = jwt();
+    return {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type':  'application/json',
+      'Prefer':        extraPrefer || 'return=representation',
+    };
+  }
+
+  // ── GET handling units (SAP data) ────────────────────────
   async function getSAPData() {
-    const jwt = NovusAuth.getJWT();
+    const token = jwt(); if (!token) return [];
     const res = await fetch(
       `${DB_URL}/handling_units?plant_id=eq.${PLANT_ID}&select=*&limit=50000`,
-      { headers: dbHeaders(jwt) }
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        }
+      }
     );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`getSAPData failed ${res.status}: ${text}`);
+    }
     const rows = await res.json();
     return rows.map(r => ({
-      sapBin:    r.bin_code,
-      hu:        r.hu_number,
-      product:   r.sku,
-      desc:      r.description || '',
-      batch:     r.batch       || '',
-      sapQty:    r.quantity    || 0,
-      unit:      r.uom         || 'LB',
-      sled:      r.sled        || '',
-      stockType: r.stock_type  || 'F2',
+      sapBin:    r.bin_code      || '',
+      hu:        r.hu_number     || '',
+      product:   r.sku           || '',
+      desc:      r.description   || '',
+      batch:     r.batch         || '',
+      sapQty:    r.quantity      || 0,
+      unit:      r.uom           || 'LB',
+      sled:      r.sled          || '',
+      stockType: r.stock_type    || 'F2',
     }));
   }
 
+  // ── Upload SAP data ───────────────────────────────────────
   async function uploadSAPData(rows, filename, uploader) {
-    const jwt     = NovusAuth.getJWT();
+    const token = jwt(); if (!token) return { success: false };
+
     const records = rows.map(r => ({
       plant_id:     PLANT_ID,
       bin_code:     String(r[0] || '').trim().toUpperCase(),
@@ -109,17 +143,31 @@ const NovusDB = (() => {
       state:        'ok',
     })).filter(r => r.bin_code && r.hu_number);
 
+    if (!records.length) throw new Error('No valid rows found');
+
     const CHUNK = 500;
-    let total = 0;
+    let   total = 0;
+
     for (let i = 0; i < records.length; i += CHUNK) {
-      const res = await fetch(`${DB_URL}/handling_units`, {
+      const chunk = records.slice(i, i + CHUNK);
+      const res   = await fetch(`${DB_URL}/handling_units`, {
         method:  'POST',
-        headers: { ...dbHeaders(jwt), 'Prefer': 'resolution=merge-duplicates,return=representation' },
-        body:    JSON.stringify(records.slice(i, i + CHUNK)),
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'resolution=merge-duplicates,return=minimal',
+        },
+        body: JSON.stringify(chunk),
       });
-      if (res.ok) total += Math.min(CHUNK, records.length - i);
+      if (res.ok) total += chunk.length;
+      else {
+        const txt = await res.text();
+        console.error('HU upsert chunk failed:', res.status, txt);
+      }
     }
 
+    // Upsert unique bins
     const bins = [...new Set(records.map(r => r.bin_code))].map(b => ({
       plant_id: PLANT_ID,
       bin_code: b,
@@ -128,49 +176,66 @@ const NovusDB = (() => {
     }));
     await fetch(`${DB_URL}/bins`, {
       method:  'POST',
-      headers: { ...dbHeaders(jwt), 'Prefer': 'resolution=merge-duplicates' },
-      body:    JSON.stringify(bins),
+      headers: {
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify(bins),
     });
 
     return { success: true, rowCount: total, filename, uploader };
   }
 
+  // ── Get today's audit events ──────────────────────────────
   async function getReport() {
-    const jwt   = NovusAuth.getJWT();
+    const token = jwt(); if (!token) return [];
     const today = new Date().toISOString().split('T')[0];
     const res   = await fetch(
       `${DB_URL}/audit_events?plant_id=eq.${PLANT_ID}&scanned_at=gte.${today}T00:00:00&select=*&order=scanned_at.desc&limit=5000`,
-      { headers: dbHeaders(jwt) }
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        }
+      }
     );
+    if (!res.ok) return [];
     const rows = await res.json();
     return rows.map(r => ({
       timestamp:  r.scanned_at,
-      user:       r.auditor_name || '',
+      user:       r.auditor_name  || '',
       aisle:      r.bin_code?.charAt(1) || '',
-      scanBin:    r.bin_code,
-      hu:         r.hu_number,
-      prod:       r.sku,
+      scanBin:    r.bin_code      || '',
+      hu:         r.hu_number     || '',
+      prod:       r.sku           || '',
       desc:       '',
-      sapQty:     r.sap_qty,
-      scanQty:    r.scan_qty,
-      type:       r.result_state,
-      note:       r.note       || '',
-      sledStatus: r.sled_status || '',
+      sapQty:     r.sap_qty       || 0,
+      scanQty:    r.scan_qty      || 0,
+      type:       r.result_state  || '',
+      note:       r.note          || '',
+      sledStatus: r.sled_status   || '',
     }));
   }
 
+  // ── Log audit via Edge Function ───────────────────────────
   async function logAudit(payload) {
-    const jwt = NovusAuth.getJWT();
-    const res = await fetch(RECONCILE_URL, {
+    const token = jwt(); if (!token) return { success: false };
+    const res   = await fetch(RECONCILE_URL, {
       method:  'POST',
-      headers: fnHeaders(jwt),
-      body:    JSON.stringify({
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
         plant_id:        PLANT_ID,
         session_id:      payload.sessionId,
         bin_code:        payload.bin,
-        auditor_id:      payload.auditorId || '',
-        auditor_name:    payload.user      || '',
-        audit_mode:      payload.auditMode || 'aisle',
+        auditor_id:      payload.auditorId  || '',
+        auditor_name:    payload.user       || '',
+        audit_mode:      payload.auditMode  || 'aisle',
         scanned_items:   (payload.items || []).map(i => ({
           hu_number: i.hu,
           scan_qty:  i.countQty,
@@ -181,15 +246,24 @@ const NovusDB = (() => {
       }),
     });
     const text = await res.text();
-    return JSON.parse(text);
+    try { return JSON.parse(text); }
+    catch { return { success: false, error: text }; }
   }
 
+  // ── Get safety incidents ──────────────────────────────────
   async function getSafety() {
-    const jwt = NovusAuth.getJWT();
-    const res = await fetch(
+    const token = jwt(); if (!token) return [];
+    const res   = await fetch(
       `${DB_URL}/safety_incidents?plant_id=eq.${PLANT_ID}&order=created_at.desc`,
-      { headers: dbHeaders(jwt) }
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        }
+      }
     );
+    if (!res.ok) return [];
     const rows = await res.json();
     return rows.map(r => ({
       id:           r.id,
@@ -205,12 +279,18 @@ const NovusDB = (() => {
     }));
   }
 
+  // ── Log safety incident ───────────────────────────────────
   async function logSafety(payload) {
-    const jwt = NovusAuth.getJWT();
-    const res = await fetch(`${DB_URL}/safety_incidents`, {
+    const token = jwt(); if (!token) return { success: false };
+    const res   = await fetch(`${DB_URL}/safety_incidents`, {
       method:  'POST',
-      headers: dbHeaders(jwt),
-      body:    JSON.stringify({
+      headers: {
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=representation',
+      },
+      body: JSON.stringify({
         plant_id:     PLANT_ID,
         reporter_name:payload.reportedBy   || '',
         location:     payload.location     || '',
@@ -223,62 +303,98 @@ const NovusDB = (() => {
       }),
     });
     const data = await res.json();
-    return { success: res.ok, id: Array.isArray(data) ? data[0]?.id : data?.id };
+    return {
+      success: res.ok,
+      id: Array.isArray(data) ? data[0]?.id : data?.id,
+    };
   }
 
+  // ── Assignments ───────────────────────────────────────────
   async function getAssignments() {
-    const jwt = NovusAuth.getJWT();
-    const res = await fetch(
+    const token = jwt(); if (!token) return [];
+    const res   = await fetch(
       `${DB_URL}/assignments?plant_id=eq.${PLANT_ID}&completed=eq.false`,
-      { headers: dbHeaders(jwt) }
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        }
+      }
     );
+    if (!res.ok) return [];
     return res.json();
   }
 
-  async function setAssignments(assignments, assignedBy) {
-    const jwt = NovusAuth.getJWT();
+  async function setAssignments(assignments) {
+    const token = jwt(); if (!token) return { success: false };
     await fetch(
       `${DB_URL}/assignments?plant_id=eq.${PLANT_ID}&completed=eq.false`,
-      { method: 'DELETE', headers: dbHeaders(jwt) }
+      {
+        method:  'DELETE',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+        }
+      }
     );
     if (!assignments.length) return { success: true };
-    const records = assignments.map(a => ({
-      plant_id:        PLANT_ID,
-      assignment_type: a.type,
-      scope_value:     a.value,
-      completed:       false,
-    }));
     const res = await fetch(`${DB_URL}/assignments`, {
       method:  'POST',
-      headers: dbHeaders(jwt),
-      body:    JSON.stringify(records),
+      headers: {
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal',
+      },
+      body: JSON.stringify(assignments.map(a => ({
+        plant_id:        PLANT_ID,
+        assignment_type: a.type,
+        scope_value:     a.value,
+        completed:       false,
+      }))),
     });
     return { success: res.ok };
   }
 
+  // ── SAP metadata ──────────────────────────────────────────
   async function getSAPMeta() {
-    const jwt = NovusAuth.getJWT();
-    const res = await fetch(
+    const token = jwt(); if (!token) return {};
+    const res   = await fetch(
       `${DB_URL}/handling_units?plant_id=eq.${PLANT_ID}&select=updated_at&order=updated_at.desc&limit=1`,
-      { headers: dbHeaders(jwt) }
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'count=exact',
+          'Range':         '0-0',
+        }
+      }
     );
-    const rows = await res.json();
-    const countRes = await fetch(
-      `${DB_URL}/handling_units?plant_id=eq.${PLANT_ID}&select=id`,
-      { headers: { ...dbHeaders(jwt), 'Prefer': 'count=exact', 'Range': '0-0' } }
-    );
-    const count = countRes.headers.get('content-range')?.split('/')?.[1] || 0;
-    return { timestamp: rows[0]?.updated_at || null, rowCount: count, uploader: '', filename: '' };
+    const rows  = await res.json();
+    const count = res.headers.get('content-range')?.split('/')?.[1] || 0;
+    return {
+      timestamp: rows[0]?.updated_at || null,
+      rowCount:  count,
+      uploader:  '',
+      filename:  '',
+    };
   }
 
+  // ── Poll — called every 10 seconds ────────────────────────
   async function poll() {
     const [report, safety, sapMeta] = await Promise.all([
-      getReport(), getSafety(), getSAPMeta(),
+      getReport(),
+      getSafety(),
+      getSAPMeta(),
     ]);
     return {
       report,
       safetyOpen: safety.filter(i => i.status === 'open').length,
       sapMeta,
+      assignments: [],
     };
   }
 
@@ -421,3 +537,13 @@ const NovusLoader = (() => {
 // CONSTANTS
 // ══════════════════════════════════════════════════════════════
 const AISLE_ROWS = 'ABCDEFGHJKLMNP'.split('');
+
+// ── Auth guard — redirect to login if not authenticated ──────
+// Call this at the top of each page script
+function requireAuth() {
+  if (!NovusAuth.isLoggedIn()) {
+    window.location.href = 'login.html';
+    return false;
+  }
+  return true;
+}

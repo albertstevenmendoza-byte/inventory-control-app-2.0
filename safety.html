@@ -207,6 +207,8 @@ textarea.field{resize:none;line-height:1.5}
 
 <script src="novus-core.js"></script>
 <script>
+  // Redirect to login if not authenticated
+if (!requireAuth()) throw new Error('Not authenticated');
 'use strict';
 let incidents=[],severity='medium',incidentType='Near Miss',incidentStatus='open',photoBase64=null,currentFilter='all';
 
