@@ -1420,21 +1420,31 @@ function showSetup() { switchScreen('setup'); buildAisleGrid(); }
    CLOUD FETCH
 ══════════════════════════════════════════════ */
 async function pullCloud() {
-  NovusLoader.start();
-  try {
-    const res  = await fetch(API_URL + '?type=sapdata', { redirect: 'follow' });
-    const data = JSON.parse(await res.text());
-    if (data.sapData && data.sapData.length > 0) {
-      sapMaster = data.sapData;
-      localStorage.setItem('novus_sap', JSON.stringify(sapMaster));
-      buildIndexes(); showSetup();
-      toast(`${sapMaster.length.toLocaleString()} items loaded`, 'blue');
-    } else { _showNoData(); }
-  } catch {
-    isOnline = false; updateSyncDot();
-    if (sapMaster.length > 0) { buildIndexes(); showSetup(); toast('Offline — cached data', 'amber'); }
-    else _showNoData();
-  } finally { NovusLoader.done(); }
+     NovusLoader.start();
+     try {
+       const sapData = await NovusDB.getSAPData();
+       if (sapData && sapData.length > 0) {
+         sapMaster = sapData;
+         localStorage.setItem('novus_sap', JSON.stringify(sapMaster));
+         buildIndexes();
+         showSetup();
+         toast(`${sapMaster.length.toLocaleString()} items loaded`, 'blue');
+       } else {
+         _showNoData();
+       }
+     } catch (err) {
+       isOnline = false;
+       updateSyncDot();
+       if (sapMaster.length > 0) {
+         buildIndexes();
+         showSetup();
+         toast('Offline — using cached data', 'amber');
+       } else {
+         _showNoData();
+       }
+     } finally {
+       NovusLoader.done();
+     }
 }
 function _showNoData() {
   showSetup();
