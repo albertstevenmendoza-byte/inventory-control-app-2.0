@@ -1128,49 +1128,80 @@ async function _fetchSafetySummary(){
 /* ════════════════════════════════
    SAP UPLOAD
 ════════════════════════════════ */
-document.getElementById('file-input').addEventListener('change',async(e)=>{
-  const file=e.target.files?.[0];if(!file)return;
-  const zone=document.getElementById('upload-zone');
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const zone  = document.getElementById('upload-zone');
   zone.classList.add('uploading');
-  document.getElementById('uz-icon').textContent='⏳';
-  document.getElementById('uz-label').textContent='Parsing…';
+  document.getElementById('uz-icon').textContent  = '⏳';
+  document.getElementById('uz-label').textContent = 'Parsing…';
   NovusLoader.start();
-  try{
-    const ab=await file.arrayBuffer();
-    const wb=XLSX.read(new Uint8Array(ab),{type:'array'});
-    const json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    if(!json.length)throw new Error('Sheet is empty');
-    const rows=json.map(r=>{
-      const bin=_col(r,['Storage Bin','Bin','Stge Bin','StorageBin','SBin']);
-      const hu =_col(r,['Handling Unit','HU','HandlingUnit','Hndlg Unit']);
-      const prod=_col(r,['Product','Material','SKU','Matl','Material Number']);
-      const bat=_col(r,['Batch','Btch']);
-      const desc=_col(r,['Product Short Description','Description','Material Description','Matl Desc','Short Text']);
-      const qty=_col(r,['Quantity','Qty','Available stock','Avail. Stock','Unrestricted','Total Stock']);
-      const unit=_col(r,['Unit','UOM','Base Unit','BUn']);
-      const sty=_col(r,['Stock Type','StkType']);
-      const grd=_col(r,['Goods Receipt Date','GR Date']);
-      const sled=_col(r,['Shelf Life Expiration Date','SLED','SLED/BBD','Expiration']);
-      return[String(bin??'').trim().toUpperCase(),String(hu??'').trim(),String(prod??'').trim(),String(bat??'').trim(),String(desc??'').trim(),parseFloat(qty)||0,String(unit??'LB').trim(),String(sty??'F2').trim(),String(grd??''),String(sled??'')];
-    }).filter(r=>r[0]&&r[1]);
-    if(!rows.length)throw new Error('0 valid rows — needs Bin + HU columns');
-    document.getElementById('uz-label').textContent=`Uploading ${rows.length.toLocaleString()} rows…`;
-    const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify({action:'uploadSAPData',rows,uploader:NovusSettings.getUser()||'Control Center',filename:file.name})});
-    const result=JSON.parse(await res.text());
-    if(result.success){
-      zone.classList.remove('uploading');zone.classList.add('success');
-      document.getElementById('uz-icon').textContent='✅';
-      document.getElementById('uz-label').textContent=`${result.rowCount.toLocaleString()} items loaded`;
-      toast(`SAP import: ${result.rowCount.toLocaleString()} rows`,'green');
-      setTimeout(_resetUploadZone,4000);fetchFullDashboard();
-    }else throw new Error(result.error||'Upload failed');
-  }catch(err){
-    toast('Upload failed: '+err.message,'red');
-    zone.classList.remove('uploading');zone.classList.add('error');
-    document.getElementById('uz-icon').textContent='❌';
-    document.getElementById('uz-label').textContent=err.message.substring(0,42);
-    setTimeout(_resetUploadZone,4000);
-  }finally{NovusLoader.done();e.target.value='';}
+
+  try {
+    const ab   = await file.arrayBuffer();
+    const wb   = XLSX.read(new Uint8Array(ab), { type: 'array' });
+    const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    if (!json.length) throw new Error('Sheet is empty');
+
+    const rows = json.map(r => {
+      const bin  = _col(r, ['Storage Bin','Bin','Stge Bin','StorageBin','SBin']);
+      const hu   = _col(r, ['Handling Unit','HU','HandlingUnit','Hndlg Unit']);
+      const prod = _col(r, ['Product','Material','SKU','Matl','Material Number']);
+      const bat  = _col(r, ['Batch','Btch']);
+      const desc = _col(r, ['Product Short Description','Description','Material Description','Matl Desc','Short Text']);
+      const qty  = _col(r, ['Quantity','Qty','Available stock','Avail. Stock','Unrestricted','Total Stock']);
+      const unit = _col(r, ['Unit','UOM','Base Unit','BUn']);
+      const sty  = _col(r, ['Stock Type','StkType']);
+      const grd  = _col(r, ['Goods Receipt Date','GR Date']);
+      const sled = _col(r, ['Shelf Life Expiration Date','SLED','SLED/BBD','Expiration']);
+      return [
+        String(bin  ?? '').trim().toUpperCase(),
+        String(hu   ?? '').trim(),
+        String(prod ?? '').trim(),
+        String(bat  ?? '').trim(),
+        String(desc ?? '').trim(),
+        parseFloat(qty) || 0,
+        String(unit ?? 'LB').trim(),
+        String(sty  ?? 'F2').trim(),
+        String(grd  ?? ''),
+        String(sled ?? ''),
+      ];
+    }).filter(r => r[0] && r[1]);
+
+    if (!rows.length) throw new Error('0 valid rows — needs Bin + HU columns');
+
+    document.getElementById('uz-label').textContent = `Uploading ${rows.length.toLocaleString()} rows…`;
+
+    const result = await NovusDB.uploadSAPData(
+      rows,
+      file.name,
+      NovusSettings.getUser() || 'Control Center'
+    );
+
+    if (result.success) {
+      zone.classList.remove('uploading');
+      zone.classList.add('success');
+      document.getElementById('uz-icon').textContent  = '✅';
+      document.getElementById('uz-label').textContent = `${result.rowCount.toLocaleString()} items loaded`;
+      toast(`SAP import: ${result.rowCount.toLocaleString()} rows from ${file.name}`, 'green');
+      setTimeout(_resetUploadZone, 4000);
+      fetchFullDashboard();
+    } else {
+      throw new Error('Upload failed');
+    }
+
+  } catch (err) {
+    toast('Upload failed: ' + err.message, 'red');
+    zone.classList.remove('uploading');
+    zone.classList.add('error');
+    document.getElementById('uz-icon').textContent  = '❌';
+    document.getElementById('uz-label').textContent = err.message.substring(0, 42);
+    setTimeout(_resetUploadZone, 4000);
+  } finally {
+    NovusLoader.done();
+    e.target.value = '';
+  }
 });
 
 function _resetUploadZone(){const z=document.getElementById('upload-zone');z.classList.remove('success','uploading','error');document.getElementById('uz-icon').textContent='📂';document.getElementById('uz-label').textContent='Drop SAP Export (.xlsx)';}
