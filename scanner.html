@@ -435,7 +435,7 @@ input,textarea{font-family:inherit}
       <button class="hdr-btn" id="refresh-btn" onclick="refreshAll()">↻ Refresh</button>
       <div class="sync-dot" id="sync-dot"></div>
       <button class="hdr-btn" onclick="NovusSettings.openModal()">⚙</button>
-      <button class="hdr-btn" onclick="promptName()">👤 <span id="name-display">Set Name</span></button>
+
     </div>
   </div>
 
@@ -604,7 +604,8 @@ let huIndex    = new Map();           // hu → item
 let completedBins = _loadDone();      // Set of bin strings, expires daily
 let offlineQueue  = _loadQueue();     // Array of pending payloads
 let isOnline      = navigator.onLine;
-let auditorName   = NovusSettings.getUser();
+// auditorName is always 'Counter' — no login required on scanner
+const auditorName = 'Counter';
 
 // Counting session state
 let currentBin   = '';
@@ -618,7 +619,6 @@ let activeMoveIdx = -1;    // Index of item currently in the move modal
 let isSubmitting  = false; // Guards against double-taps on finalize
 
 /* ─── Init ──────────────────────────────── */
-_syncNameDisplay();
 _updateQueueBadge();
 _updateSyncDot();
 
@@ -633,11 +633,8 @@ if (sapMaster.length > 0) {
 window.addEventListener('online',  () => { isOnline = true;  _updateSyncDot(); _flushQueue(); });
 window.addEventListener('offline', () => { isOnline = false; _updateSyncDot(); });
 
-/* Settings change → refresh name display */
-window.addEventListener('novus-settings-changed', () => {
-  auditorName = NovusSettings.getUser();
-  _syncNameDisplay();
-});
+/* Settings change → no-op on scanner (name is fixed) */
+window.addEventListener('novus-settings-changed', () => {});
 
 /* ─── Delegated event listeners ─────────────
    Both click and input events on #hu-list use
@@ -1476,20 +1473,6 @@ function _updateQueueBadge() {
     badge.hidden = false;
   } else {
     badge.hidden = true;
-  }
-}
-
-function _syncNameDisplay() {
-  const el = document.getElementById('name-display');
-  if (el) el.textContent = auditorName || 'Set Name';
-}
-
-function promptName() {
-  const name = prompt('Your name or ID:', auditorName);
-  if (name !== null) {
-    auditorName = name.trim();
-    NovusSettings.set('userName', auditorName);
-    _syncNameDisplay();
   }
 }
 
