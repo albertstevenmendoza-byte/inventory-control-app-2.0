@@ -1,549 +1,389 @@
-'use strict';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Safety Reporter — Novus Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1117;--surface:#181a23;--surface-2:#1f2230;--surface-3:#2a2d3a;--border:#313546;--text:#eceef4;--text-2:#9ba1b5;--text-3:#6c7189;--accent:#5b9aff;--accent-dim:rgba(91,154,255,.1);--green:#34d399;--green-bg:rgba(52,211,153,.1);--red:#f87171;--red-bg:rgba(248,113,113,.1);--amber:#fbbf24;--amber-bg:rgba(251,191,36,.1);--radius:14px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+button{font-family:inherit;border:none;cursor:pointer}
+button:active{transform:scale(.96)}
+.screen{display:none;flex-direction:column;min-height:100dvh}
+.screen.active{display:flex}
+.header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.header h1{font-size:16px;font-weight:800}
+.hdr-btn{background:var(--surface-2);color:var(--text-2);padding:8px 14px;border-radius:10px;font-size:11px;font-weight:700;text-decoration:none}
+.report-btn{background:var(--red);color:#fff;padding:10px 18px;border-radius:12px;font-size:11px;font-weight:800;text-transform:uppercase}
+.content{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+.content::-webkit-scrollbar{display:none}
+.field-label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-3);display:block;margin:18px 0 6px}
+.field-label:first-child{margin-top:0}
+.field{width:100%;padding:14px 16px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;font-size:15px;font-weight:600;color:var(--text);outline:none;font-family:inherit}
+.field:focus{border-color:var(--accent)}
+.field::placeholder{color:var(--text-3)}
+textarea.field{resize:none;line-height:1.5}
+.sev-row{display:flex;gap:6px}
+.sev-pill{flex:1;padding:16px 0;border-radius:12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;background:var(--surface-2);color:var(--text-3);border:2px solid transparent;min-height:52px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.sev-pill.active{border-color:var(--sc);color:var(--sc);background:var(--sb)}
+.photo-row{display:flex;gap:8px;margin-bottom:8px}
+.photo-btn{flex:1;padding:20px 0;border-radius:12px;text-align:center;font-size:11px;font-weight:800;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-height:60px;justify-content:center}
+.photo-btn.cam{background:var(--accent-dim);border:1.5px dashed rgba(91,154,255,.25);color:var(--accent)}
+.photo-btn.gal{background:var(--surface-2);border:1.5px dashed var(--border);color:var(--text-3)}
+.preview-wrap{position:relative;margin-bottom:8px}
+.preview-img{width:100%;border-radius:12px;border:1px solid var(--border);max-height:200px;object-fit:contain;background:var(--surface-2)}
+.preview-remove{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;width:30px;height:30px;border-radius:50%;font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center}
+.submit-btn{width:100%;margin-top:24px;padding:20px;border-radius:var(--radius);background:var(--red);color:#fff;font-size:14px;font-weight:800;text-transform:uppercase;min-height:60px}
+.submit-btn:disabled{opacity:.5;pointer-events:none}
+.inc-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:8px}
+.inc-top{display:flex;justify-content:space-between;margin-bottom:6px}
+.inc-sev,.inc-status{font-size:8px;font-weight:800;text-transform:uppercase;padding:3px 10px;border-radius:6px}
+.inc-sev.low{background:var(--green-bg);color:var(--green)}.inc-sev.medium{background:var(--amber-bg);color:var(--amber)}
+.inc-sev.high{background:var(--red-bg);color:var(--red)}.inc-sev.critical{background:var(--red-bg);color:#7c2d12;font-weight:900}
+.inc-status.open{background:var(--red-bg);color:var(--red)}.inc-status.resolved{background:var(--green-bg);color:var(--green)}
+.inc-loc{font-size:12px;font-weight:700;margin-bottom:3px}
+.inc-desc{font-size:11px;color:var(--text-2);line-height:1.4}
+.inc-footer{display:flex;justify-content:space-between;margin-top:8px;font-size:9px;color:var(--text-3);font-weight:600}
+.empty{text-align:center;padding:60px 24px;color:var(--text-3)}
+.empty-icon{font-size:42px;display:block;margin-bottom:10px}
+.success{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px}
+.success-icon{font-size:60px;margin-bottom:16px}
+.success h2{font-size:22px;font-weight:900;margin-bottom:6px}
+.success p{color:var(--text-2);font-size:13px}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:12px;font-size:12px;font-weight:700;z-index:999;pointer-events:none;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+.toast.green{background:var(--green-bg);color:var(--green);border:1px solid rgba(52,211,153,.25)}
+.toast.red{background:var(--red-bg);color:var(--red);border:1px solid rgba(248,113,113,.25)}
+.toast.amber{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(251,191,36,.25)}
+</style>
+</head>
+<body>
 
-const SUPABASE_URL      = 'https://qswrdmxeofuxpqpwlyqv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzd3JkbXhlb2Z1eHBxcHdseXF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODE5NDEsImV4cCI6MjA5MjA1Nzk0MX0.lwWwcFbioA7btr7w85hzVAcYjyv0KPPWL50Q7Q4nZAM';
-const PLANT_ID          = '27d1dea0-9276-46ca-ac3a-7c0512f92336';
-const RECONCILE_URL     = `${SUPABASE_URL}/functions/v1/reconcile-bin`;
-const DB_URL            = `${SUPABASE_URL}/rest/v1`;
-const API_URL           = RECONCILE_URL;
+<div id="toast" class="toast"><span id="toast-text"></span></div>
 
-let _currentSession = null;
+<div id="screen-list" class="screen active">
+  <div class="header">
+    <a href="index.html" class="hdr-btn">← Home</a>
+    <h1>Safety Reports</h1>
+    <div style="display:flex;gap:8px">
+      <button class="hdr-btn" style="font-size:14px;padding:8px 10px" onclick="NovusSettings.openModal()">⚙</button>
+      <button class="report-btn" onclick="showForm()">+ Report</button>
+    </div>
+  </div>
+  <div class="content" id="incident-list"></div>
+</div>
 
-function dbHeaders(jwt) {
-  return {
-    'apikey':        SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${jwt || SUPABASE_ANON_KEY}`,
-    'Content-Type':  'application/json',
-    'Prefer':        'return=representation',
-  };
-}
+<div id="screen-form" class="screen">
+  <div class="header">
+    <button class="hdr-btn" onclick="showList()">← Back</button>
+    <h1>Report Incident</h1>
+    <div></div>
+  </div>
+  <div class="content">
+    <label class="field-label">Your Name *</label>
+    <input type="text" class="field" id="f-name" placeholder="Your name">
+    <label class="field-label">Location *</label>
+    <input type="text" class="field" id="f-location" placeholder="e.g. Aisle F, near bin WF12A">
+    <label class="field-label">Photo Evidence</label>
+    <div id="photo-area">
+      <div class="photo-row">
+        <input type="file" accept="image/*" capture="environment" id="cam-input" hidden onchange="handlePhoto(event)">
+        <label for="cam-input" class="photo-btn cam">📷 Camera</label>
+        <input type="file" accept="image/*" id="gal-input" hidden onchange="handlePhoto(event)">
+        <label for="gal-input" class="photo-btn gal">🖼️ Gallery</label>
+      </div>
+    </div>
+    <div id="photo-preview"></div>
+    <label class="field-label">Description *</label>
+    <textarea class="field" id="f-desc" rows="4" placeholder="Describe the hazard or incident..."></textarea>
+    <label class="field-label">Severity</label>
+    <div class="sev-row" id="sev-row">
+      <button class="sev-pill" data-sev="low" style="--sc:var(--green);--sb:var(--green-bg)" onclick="setSev('low',this)">Low</button>
+      <button class="sev-pill active" data-sev="medium" style="--sc:var(--amber);--sb:var(--amber-bg)" onclick="setSev('medium',this)">Medium</button>
+      <button class="sev-pill" data-sev="high" style="--sc:var(--red);--sb:var(--red-bg)" onclick="setSev('high',this)">High</button>
+      <button class="sev-pill" data-sev="critical" style="--sc:#991b1b;--sb:var(--red-bg)" onclick="setSev('critical',this)">Critical</button>
+    </div>
+    <label class="field-label">Resolution *</label>
+    <textarea class="field" id="f-resolution" rows="3" placeholder="Describe what action was taken..."></textarea>
+    <button class="submit-btn" id="submit-btn" onclick="submitIncident()">Submit Report</button>
+  </div>
+</div>
 
-function fnHeaders(jwt) {
-  return {
-    'Authorization': `Bearer ${jwt || SUPABASE_ANON_KEY}`,
-    'Content-Type':  'application/json',
-  };
-}
+<div id="screen-success" class="screen">
+  <div class="success">
+    <span class="success-icon">✅</span>
+    <h2>Report Submitted</h2>
+    <p>Your safety report has been logged</p>
+  </div>
+</div>
 
-// ══════════════════════════════════════════════════════════════
-// AUTH
-// ══════════════════════════════════════════════════════════════
-const NovusAuth = (() => {
-  async function signIn(email, password) {
-    const res  = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method:  'POST',
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (data.access_token) {
-      _currentSession = data;
-      localStorage.setItem('novus_session', JSON.stringify(data));
-      return { success: true, session: data };
-    }
-    return { success: false, error: data.error_description || 'Login failed' };
-  }
-
-  function signOut() {
-    _currentSession = null;
-    localStorage.removeItem('novus_session');
-    window.location.href = 'login.html';
-  }
-
-  function getSession() {
-    if (_currentSession) return _currentSession;
-    try {
-      const s = localStorage.getItem('novus_session');
-      if (s) { _currentSession = JSON.parse(s); return _currentSession; }
-    } catch {}
-    return null;
-  }
-
-  function getJWT()    { return getSession()?.access_token || null; }
-  function getUser()   { return getSession()?.user || null; }
-  function isLoggedIn(){ return !!getSession(); }
-
-  return { signIn, signOut, getSession, getJWT, getUser, isLoggedIn };
-})();
-
-// ══════════════════════════════════════════════════════════════
-// DATABASE
-// ══════════════════════════════════════════════════════════════
-const NovusDB = (() => {
-
-  // ── Get JWT safely ────────────────────────────────────────
-  function jwt() {
-    const token = NovusAuth.getJWT();
-    if (!token) {
-      window.location.href = 'login.html';
-      return null;
-    }
-    return token;
-  }
-
-  // ── REST headers ──────────────────────────────────────────
-  function headers(extraPrefer) {
-    const token = jwt();
-    return {
-      'apikey':        SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${token}`,
-      'Content-Type':  'application/json',
-      'Prefer':        extraPrefer || 'return=representation',
-    };
-  }
-
-  // ── GET handling units (SAP data) ────────────────────────
-  async function getSAPData() {
-    const token = jwt(); if (!token) return [];
-    const res = await fetch(
-      `${DB_URL}/handling_units?plant_id=eq.${PLANT_ID}&select=*&limit=50000`,
-      {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-        }
-      }
-    );
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`getSAPData failed ${res.status}: ${text}`);
-    }
-    const rows = await res.json();
-    return rows.map(r => ({
-      sapBin:    r.bin_code      || '',
-      hu:        r.hu_number     || '',
-      product:   r.sku           || '',
-      desc:      r.description   || '',
-      batch:     r.batch         || '',
-      sapQty:    r.quantity      || 0,
-      unit:      r.uom           || 'LB',
-      sled:      r.sled          || '',
-      stockType: r.stock_type    || 'F2',
-    }));
-  }
-
-  // ── Upload SAP data ───────────────────────────────────────
-  async function uploadSAPData(rows, filename, uploader) {
-    const token = jwt(); if (!token) return { success: false };
-
-    const records = rows.map(r => ({
-      plant_id:     PLANT_ID,
-      bin_code:     String(r[0] || '').trim().toUpperCase(),
-      hu_number:    String(r[1] || '').trim(),
-      sku:          String(r[2] || '').trim(),
-      batch:        String(r[3] || '').trim(),
-      description:  String(r[4] || '').trim(),
-      quantity:     parseFloat(r[5]) || 0,
-      uom:          String(r[6] || 'LB').trim(),
-      stock_type:   String(r[7] || 'F2').trim(),
-      sled:         r[9] ? String(r[9]).trim() : null,
-      sap_bin_code: String(r[0] || '').trim().toUpperCase(),
-      sap_quantity: parseFloat(r[5]) || 0,
-      state:        'ok',
-    })).filter(r => r.bin_code && r.hu_number);
-
-    if (!records.length) throw new Error('No valid rows found');
-
-    const CHUNK = 500;
-    let   total = 0;
-
-    for (let i = 0; i < records.length; i += CHUNK) {
-      const chunk = records.slice(i, i + CHUNK);
-      const res   = await fetch(`${DB_URL}/handling_units`, {
-        method:  'POST',
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-          'Prefer':        'resolution=merge-duplicates,return=minimal',
-        },
-        body: JSON.stringify(chunk),
-      });
-      if (res.ok) total += chunk.length;
-      else {
-        const txt = await res.text();
-        console.error('HU upsert chunk failed:', res.status, txt);
-      }
-    }
-
-    // Upsert unique bins
-    const bins = [...new Set(records.map(r => r.bin_code))].map(b => ({
-      plant_id: PLANT_ID,
-      bin_code: b,
-      aisle:    b.match(/^W([A-Z])/)?.[1] || '',
-      active:   true,
-    }));
-    await fetch(`${DB_URL}/bins`, {
-      method:  'POST',
-      headers: {
-        'apikey':        SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${token}`,
-        'Content-Type':  'application/json',
-        'Prefer':        'resolution=merge-duplicates,return=minimal',
-      },
-      body: JSON.stringify(bins),
-    });
-
-    return { success: true, rowCount: total, filename, uploader };
-  }
-
-  // ── Get today's audit events ──────────────────────────────
-  async function getReport() {
-    const token = jwt(); if (!token) return [];
-    const today = new Date().toISOString().split('T')[0];
-    const res   = await fetch(
-      `${DB_URL}/audit_events?plant_id=eq.${PLANT_ID}&scanned_at=gte.${today}T00:00:00&select=*&order=scanned_at.desc&limit=5000`,
-      {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-        }
-      }
-    );
-    if (!res.ok) return [];
-    const rows = await res.json();
-    return rows.map(r => ({
-      timestamp:  r.scanned_at,
-      user:       r.auditor_name  || '',
-      aisle:      r.bin_code?.charAt(1) || '',
-      scanBin:    r.bin_code      || '',
-      hu:         r.hu_number     || '',
-      prod:       r.sku           || '',
-      desc:       '',
-      sapQty:     r.sap_qty       || 0,
-      scanQty:    r.scan_qty      || 0,
-      type:       r.result_state  || '',
-      note:       r.note          || '',
-      sledStatus: r.sled_status   || '',
-    }));
-  }
-
-  // ── Log audit via Edge Function ───────────────────────────
-  async function logAudit(payload) {
-    const token = jwt(); if (!token) return { success: false };
-    const res   = await fetch(RECONCILE_URL, {
-      method:  'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type':  'application/json',
-      },
-      body: JSON.stringify({
-        plant_id:        PLANT_ID,
-        session_id:      payload.sessionId,
-        bin_code:        payload.bin,
-        auditor_id:      payload.auditorId  || '',
-        auditor_name:    payload.user       || '',
-        audit_mode:      payload.auditMode  || 'aisle',
-        scanned_items:   (payload.items || []).map(i => ({
-          hu_number: i.hu,
-          scan_qty:  i.countQty,
-          note:      i.note || '',
-          sled:      i.sled || '',
-        })),
-        idempotency_key: payload.idempotencyKey,
-      }),
-    });
-    const text = await res.text();
-    try { return JSON.parse(text); }
-    catch { return { success: false, error: text }; }
-  }
-
-  // ── Get safety incidents ──────────────────────────────────
-  async function getSafety() {
-    const token = jwt(); if (!token) return [];
-    const res   = await fetch(
-      `${DB_URL}/safety_incidents?plant_id=eq.${PLANT_ID}&order=created_at.desc`,
-      {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-        }
-      }
-    );
-    if (!res.ok) return [];
-    const rows = await res.json();
-    return rows.map(r => ({
-      id:           r.id,
-      reportedBy:   r.reporter_name || '',
-      location:     r.location      || '',
-      incidentType: r.incident_type || '',
-      severity:     r.severity      || 'low',
-      description:  r.description   || '',
-      resolution:   r.resolution    || '',
-      status:       r.status        || 'open',
-      photoUrl:     r.photo_url     || '',
-      timestamp:    r.created_at,
-    }));
-  }
-
-  // ── Log safety incident ───────────────────────────────────
-  async function logSafety(payload) {
-    const token = jwt(); if (!token) return { success: false };
-    const res   = await fetch(`${DB_URL}/safety_incidents`, {
-      method:  'POST',
-      headers: {
-        'apikey':        SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${token}`,
-        'Content-Type':  'application/json',
-        'Prefer':        'return=representation',
-      },
-      body: JSON.stringify({
-        plant_id:     PLANT_ID,
-        reporter_name:payload.reportedBy   || '',
-        location:     payload.location     || '',
-        incident_type:payload.incidentType || '',
-        severity:     payload.severity     || 'low',
-        description:  payload.description  || '',
-        resolution:   payload.resolution   || '',
-        status:       payload.status       || 'open',
-        photo_url:    payload.photoUrl     || '',
-      }),
-    });
-    const data = await res.json();
-    return {
-      success: res.ok,
-      id: Array.isArray(data) ? data[0]?.id : data?.id,
-    };
-  }
-
-  // ── Assignments ───────────────────────────────────────────
-  async function getAssignments() {
-    const token = jwt(); if (!token) return [];
-    const res   = await fetch(
-      `${DB_URL}/assignments?plant_id=eq.${PLANT_ID}&completed=eq.false`,
-      {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-        }
-      }
-    );
-    if (!res.ok) return [];
-    return res.json();
-  }
-
-  async function setAssignments(assignments) {
-    const token = jwt(); if (!token) return { success: false };
-    await fetch(
-      `${DB_URL}/assignments?plant_id=eq.${PLANT_ID}&completed=eq.false`,
-      {
-        method:  'DELETE',
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-        }
-      }
-    );
-    if (!assignments.length) return { success: true };
-    const res = await fetch(`${DB_URL}/assignments`, {
-      method:  'POST',
-      headers: {
-        'apikey':        SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${token}`,
-        'Content-Type':  'application/json',
-        'Prefer':        'return=minimal',
-      },
-      body: JSON.stringify(assignments.map(a => ({
-        plant_id:        PLANT_ID,
-        assignment_type: a.type,
-        scope_value:     a.value,
-        completed:       false,
-      }))),
-    });
-    return { success: res.ok };
-  }
-
-  // ── SAP metadata ──────────────────────────────────────────
-  async function getSAPMeta() {
-    const token = jwt(); if (!token) return {};
-    const res   = await fetch(
-      `${DB_URL}/handling_units?plant_id=eq.${PLANT_ID}&select=updated_at&order=updated_at.desc&limit=1`,
-      {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
-          'Prefer':        'count=exact',
-          'Range':         '0-0',
-        }
-      }
-    );
-    const rows  = await res.json();
-    const count = res.headers.get('content-range')?.split('/')?.[1] || 0;
-    return {
-      timestamp: rows[0]?.updated_at || null,
-      rowCount:  count,
-      uploader:  '',
-      filename:  '',
-    };
-  }
-
-  // ── Poll — called every 10 seconds ────────────────────────
-  async function poll() {
-    const [report, safety, sapMeta] = await Promise.all([
-      getReport(),
-      getSafety(),
-      getSAPMeta(),
-    ]);
-    return {
-      report,
-      safetyOpen: safety.filter(i => i.status === 'open').length,
-      sapMeta,
-      assignments: [],
-    };
-  }
-
-  return {
-    getSAPData, uploadSAPData,
-    getReport,  logAudit,
-    getSafety,  logSafety,
-    getAssignments, setAssignments,
-    getSAPMeta, poll,
-  };
-})();
-
-// ══════════════════════════════════════════════════════════════
-// SETTINGS
-// ══════════════════════════════════════════════════════════════
+<script>
 const NovusSettings = (() => {
   const STORAGE_KEY = 'novus_settings';
-  const DEFAULTS = {
-    userName: '', theme: 'dark',
-    hapticFeedback: true, compactMode: false,
-  };
-  const DARK_VARS = {
-    '--bg':'#101420','--bg-2':'#131826',
-    '--surface':'#1a1f2e','--surface-2':'#1f2538',
-    '--surface-3':'#252c3e','--surface-4':'#2a3142',
-    '--border':'rgba(255,255,255,.055)',
-    '--border-2':'rgba(255,255,255,.09)',
-    '--text':'#e1e5f0','--text-2':'#94a3b8','--text-3':'#4a5568',
-    '--accent':'#00e5ff','--accent-dim':'rgba(0,229,255,.07)',
-    '--teal':'#0d9488','--teal-dim':'rgba(13,148,136,.1)',
-    '--teal-border':'rgba(13,148,136,.3)',
-    '--green':'#10b981','--green-bg':'rgba(16,185,129,.08)',
-    '--green-border':'rgba(16,185,129,.22)',
-    '--red':'#ef4444','--red-bg':'rgba(239,68,68,.08)',
-    '--red-border':'rgba(239,68,68,.22)',
-    '--amber':'#f59e0b','--amber-bg':'rgba(245,158,11,.08)',
-    '--amber-border':'rgba(245,158,11,.22)',
-    '--purple':'#a78bfa','--purple-bg':'rgba(167,139,250,.08)',
-    '--cyan':'#00e5ff','--cyan-bg':'rgba(0,229,255,.07)',
-    '--fresh':'#f472b6','--fresh-bg':'rgba(244,114,182,.08)',
-    '--fresh-border':'rgba(244,114,182,.22)',
-  };
+  const DEFAULTS = { userName: '', theme: 'dark', pollInterval: 10, hapticFeedback: true, compactMode: false };
+
   const LIGHT_VARS = {
-    '--bg':'#f8f9fb','--surface':'#ffffff',
-    '--surface-2':'#f1f3f5','--surface-3':'#e5e7eb',
-    '--border':'#d1d5dc','--text':'#111827',
-    '--text-2':'#374151','--text-3':'#6b7280',
-    '--accent':'#0d9488','--accent-dim':'rgba(13,148,136,.07)',
-    '--green':'#059669','--green-bg':'rgba(5,150,105,.08)',
-    '--red':'#dc2626','--red-bg':'rgba(220,38,38,.07)',
-    '--amber':'#b45309','--amber-bg':'rgba(180,83,9,.07)',
+    '--bg': '#f8f9fb', '--surface': '#ffffff', '--surface-2': '#f1f3f5', '--surface-3': '#e5e7eb',
+    '--border': '#d1d5dc', '--text': '#111827', '--text-2': '#374151', '--text-3': '#6b7280',
+    '--accent': '#2563eb', '--accent-dim': 'rgba(37,99,235,.07)',
+    '--green': '#059669', '--green-bg': 'rgba(5,150,105,.08)',
+    '--red': '#dc2626', '--red-bg': 'rgba(220,38,38,.07)',
+    '--amber': '#b45309', '--amber-bg': 'rgba(180,83,9,.07)',
+    '--purple': '#7c3aed', '--purple-bg': 'rgba(124,58,237,.07)',
+    '--cyan': '#0e7490', '--cyan-bg': 'rgba(14,116,144,.07)'
+  };
+
+  const DARK_VARS = {
+    '--bg': '#0f1117', '--surface': '#181a23', '--surface-2': '#1f2230', '--surface-3': '#2a2d3a',
+    '--border': '#313546', '--text': '#eceef4', '--text-2': '#9ba1b5', '--text-3': '#6c7189',
+    '--accent': '#5b9aff', '--accent-dim': 'rgba(91,154,255,.1)',
+    '--green': '#34d399', '--green-bg': 'rgba(52,211,153,.1)',
+    '--red': '#f87171', '--red-bg': 'rgba(248,113,113,.1)',
+    '--amber': '#fbbf24', '--amber-bg': 'rgba(251,191,36,.1)',
+    '--purple': '#a78bfa', '--purple-bg': 'rgba(167,139,250,.1)',
+    '--cyan': '#22d3ee', '--cyan-bg': 'rgba(34,211,238,.1)'
   };
 
   function loadAll() {
-    try { const r=localStorage.getItem(STORAGE_KEY); return r?{...DEFAULTS,...JSON.parse(r)}:{...DEFAULTS}; }
-    catch { return {...DEFAULTS}; }
+    try { const r = localStorage.getItem(STORAGE_KEY); return r ? { ...DEFAULTS, ...JSON.parse(r) } : { ...DEFAULTS }; }
+    catch { return { ...DEFAULTS }; }
   }
   function saveAll(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
-  let _cache = loadAll();
-  function get(key) { return _cache[key]!==undefined?_cache[key]:DEFAULTS[key]; }
-  function set(key,val) { _cache[key]=val; saveAll(_cache); if(key==='theme')applyTheme(); }
-  function getUser() { return get('userName')||''; }
 
+  let _cache = loadAll();
+  const legacyName = localStorage.getItem('novus_name');
+  if (legacyName && !_cache.userName) { _cache.userName = legacyName; saveAll(_cache); }
+
+  function get(key) { return _cache[key] !== undefined ? _cache[key] : DEFAULTS[key]; }
+  function set(key, val) {
+    _cache[key] = val; saveAll(_cache);
+    if (key === 'userName') localStorage.setItem('novus_name', val);
+    if (key === 'theme') applyTheme();
+  }
+  function getUser() { return get('userName') || ''; }
   function applyTheme() {
-    const vars = get('theme')==='light' ? LIGHT_VARS : DARK_VARS;
-    Object.entries(vars).forEach(([k,v]) => document.documentElement.style.setProperty(k,v));
-    if (document.body) document.body.setAttribute('data-theme', get('theme'));
+    const vars = get('theme') === 'light' ? LIGHT_VARS : DARK_VARS;
+    Object.entries(vars).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+    document.body.setAttribute('data-theme', get('theme'));
+  }
+
+  let _modalInjected = false;
+  function _injectModal() {
+    if (_modalInjected) return;
+    _modalInjected = true;
+    const overlay = document.createElement('div');
+    overlay.id = 'novus-settings-overlay';
+    overlay.innerHTML = `
+      <div class="ns-modal">
+        <div class="ns-header"><h3>⚙ Settings</h3><button class="ns-close" onclick="NovusSettings.closeModal()">✕</button></div>
+        <div class="ns-body">
+          <div class="ns-section"><div class="ns-section-title">Identity</div>
+            <label class="ns-field-label">Your Name / ID</label>
+            <input type="text" class="ns-input" id="ns-username" placeholder="Enter your name...">
+            <div class="ns-hint">Attached to all audit payloads and reports</div></div>
+          <div class="ns-section"><div class="ns-section-title">Appearance</div>
+            <div class="ns-toggle-row"><div><div class="ns-toggle-label">Theme</div><div class="ns-hint" style="margin-top:2px">Dark or light mode</div></div>
+              <div class="ns-theme-switch" id="ns-theme-switch" onclick="NovusSettings._toggleTheme()">
+                <span class="ns-switch-option" data-val="dark">🌙 Dark</span>
+                <span class="ns-switch-option" data-val="light">☀️ Light</span>
+                <div class="ns-switch-slider" id="ns-switch-slider"></div></div></div></div>
+          <div class="ns-section"><div class="ns-section-title">Preferences</div>
+            <div class="ns-toggle-row"><div><div class="ns-toggle-label">Haptic Feedback</div><div class="ns-hint" style="margin-top:2px">Vibrate on taps (mobile)</div></div>
+              <label class="ns-checkbox"><input type="checkbox" id="ns-haptic" onchange="NovusSettings.set('hapticFeedback',this.checked)"><span class="ns-check-slider"></span></label></div>
+            <div class="ns-toggle-row" style="margin-top:10px"><div><div class="ns-toggle-label">Compact Mode</div><div class="ns-hint" style="margin-top:2px">Smaller spacing</div></div>
+              <label class="ns-checkbox"><input type="checkbox" id="ns-compact" onchange="NovusSettings.set('compactMode',this.checked)"><span class="ns-check-slider"></span></label></div></div>
+          <div class="ns-section"><div class="ns-section-title">Data</div>
+            <button class="ns-danger-btn" onclick="if(confirm('Clear all local data?')){localStorage.removeItem('novus_sap');localStorage.removeItem('novus_done');localStorage.removeItem('novus_queue');NovusSettings._toast('Cache cleared');}">🗑 Clear Local Cache</button>
+            <div class="ns-hint" style="margin-top:6px">App v2.2 · Plant 1730</div></div>
+        </div>
+        <div class="ns-footer"><button class="ns-save-btn" onclick="NovusSettings._save()">Save & Close</button></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const style = document.createElement('style');
+    style.textContent = `
+      #novus-settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;padding:20px}
+      #novus-settings-overlay.open{display:flex}
+      .ns-modal{background:var(--surface);width:100%;max-width:480px;border-radius:16px;border:1.5px solid var(--border);display:flex;flex-direction:column;max-height:90vh;overflow:hidden}
+      .ns-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+      .ns-header h3{font-size:16px;font-weight:800;color:var(--text)}
+      .ns-close{background:none;border:none;color:var(--text-3);font-size:18px;font-weight:900;cursor:pointer}
+      .ns-body{padding:0;overflow-y:auto;flex:1}
+      .ns-section{padding:16px 20px;border-bottom:1px solid var(--border)}.ns-section:last-child{border-bottom:none}
+      .ns-section-title{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:12px}
+      .ns-field-label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-3);display:block;margin-bottom:6px}
+      .ns-input{width:100%;padding:12px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;color:var(--text);outline:none;font-family:inherit}
+      .ns-input:focus{border-color:var(--accent)}
+      .ns-hint{font-size:9px;color:var(--text-3);margin-top:4px}
+      .ns-toggle-row{display:flex;justify-content:space-between;align-items:center}
+      .ns-toggle-label{font-size:12px;font-weight:700;color:var(--text)}
+      .ns-theme-switch{display:flex;position:relative;background:var(--surface-2);border-radius:8px;border:1px solid var(--border);overflow:hidden;cursor:pointer;user-select:none}
+      .ns-switch-option{padding:6px 14px;font-size:10px;font-weight:800;color:var(--text-3);position:relative;z-index:2;transition:color .2s}
+      .ns-switch-option.active{color:#fff}
+      .ns-switch-slider{position:absolute;top:2px;left:2px;width:calc(50% - 2px);height:calc(100% - 4px);background:var(--accent);border-radius:6px;transition:transform .2s ease;z-index:1}
+      .ns-switch-slider.right{transform:translateX(100%)}
+      .ns-checkbox{position:relative;width:44px;height:24px;flex-shrink:0}
+      .ns-checkbox input{opacity:0;width:0;height:0}
+      .ns-check-slider{position:absolute;inset:0;background:var(--surface-3);border-radius:12px;cursor:pointer;transition:background .2s}
+      .ns-check-slider::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s}
+      .ns-checkbox input:checked+.ns-check-slider{background:var(--accent)}
+      .ns-checkbox input:checked+.ns-check-slider::after{transform:translateX(20px)}
+      .ns-danger-btn{width:100%;padding:10px;background:var(--red-bg);color:var(--red);border:1px solid rgba(248,113,113,.25);border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit}
+      .ns-footer{padding:12px 20px;border-top:1px solid var(--border)}
+      .ns-save-btn{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit}`;
+    document.body.appendChild(style);
   }
 
   function openModal() {
-    const ex = document.getElementById('novus-settings-overlay');
-    if (ex) { ex.classList.add('open'); _populate(); return; }
-    _inject();
+    _injectModal();
+    document.getElementById('novus-settings-overlay').classList.add('open');
+    document.getElementById('ns-username').value = get('userName');
+    document.getElementById('ns-haptic').checked = get('hapticFeedback');
+    document.getElementById('ns-compact').checked = get('compactMode');
+    _updateThemeSwitch();
   }
-  function _populate() {
-    const n=document.getElementById('ns-username');
-    const h=document.getElementById('ns-haptic');
-    if(n)n.value=get('userName');
-    if(h)h.checked=get('hapticFeedback');
-    _updateSwitch();
+  function closeModal() { const o = document.getElementById('novus-settings-overlay'); if (o) o.classList.remove('open'); }
+  function _updateThemeSwitch() {
+    const s = document.getElementById('ns-switch-slider'); const opts = document.querySelectorAll('.ns-switch-option');
+    if (!s) return; s.classList.toggle('right', get('theme') === 'light');
+    opts.forEach(o => o.classList.toggle('active', o.dataset.val === get('theme')));
   }
-  function _inject() {
-    const o=document.createElement('div');
-    o.id='novus-settings-overlay';
-    o.innerHTML=`<div class="ns-modal"><div class="ns-header"><h3>⚙ Settings</h3><button class="ns-close" onclick="NovusSettings.closeModal()">✕</button></div><div class="ns-body"><div class="ns-section"><div class="ns-section-title">Identity</div><label class="ns-field-label">Your Name</label><input type="text" class="ns-input" id="ns-username" placeholder="Your name..."></div><div class="ns-section"><div class="ns-section-title">Appearance</div><div class="ns-toggle-row"><span class="ns-toggle-label">Theme</span><div class="ns-theme-switch" onclick="NovusSettings._toggleTheme()"><span class="ns-switch-option" data-val="dark">🌙 Dark</span><span class="ns-switch-option" data-val="light">☀️ Light</span><div class="ns-switch-slider" id="ns-switch-slider"></div></div></div></div><div class="ns-section"><div class="ns-section-title">Preferences</div><div class="ns-toggle-row"><span class="ns-toggle-label">Haptic Feedback</span><label class="ns-checkbox"><input type="checkbox" id="ns-haptic" onchange="NovusSettings.set('hapticFeedback',this.checked)"><span class="ns-check-slider"></span></label></div></div><div class="ns-section"><button class="ns-danger-btn" onclick="if(confirm('Clear cache?')){localStorage.removeItem('novus_sap');localStorage.removeItem('novus_done');localStorage.removeItem('novus_queue');}">🗑 Clear Cache</button><br><button class="ns-danger-btn" style="margin-top:6px;background:rgba(239,68,68,.15)" onclick="NovusAuth.signOut()">🚪 Sign Out</button></div></div><div class="ns-footer"><button class="ns-save-btn" onclick="NovusSettings._save()">Save &amp; Close</button></div></div>`;
-    document.body.appendChild(o);
-    const s=document.createElement('style');
-    s.textContent=`#novus-settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;padding:20px}#novus-settings-overlay.open{display:flex}.ns-modal{background:var(--surface);width:100%;max-width:460px;border-radius:16px;border:1.5px solid var(--border);display:flex;flex-direction:column;max-height:90vh;overflow:hidden}.ns-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}.ns-header h3{font-size:16px;font-weight:800;color:var(--text)}.ns-close{background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer}.ns-body{overflow-y:auto;flex:1}.ns-section{padding:14px 20px;border-bottom:1px solid var(--border)}.ns-section-title{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:10px}.ns-field-label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-3);display:block;margin-bottom:6px}.ns-input{width:100%;padding:11px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-weight:600;color:var(--text);outline:none;font-family:inherit}.ns-toggle-row{display:flex;justify-content:space-between;align-items:center}.ns-toggle-label{font-size:12px;font-weight:700;color:var(--text)}.ns-theme-switch{display:flex;position:relative;background:var(--surface-2);border-radius:8px;border:1px solid var(--border);overflow:hidden;cursor:pointer;user-select:none}.ns-switch-option{padding:6px 12px;font-size:10px;font-weight:800;color:var(--text-3);position:relative;z-index:2;transition:color .2s}.ns-switch-option.active{color:#fff}.ns-switch-slider{position:absolute;top:2px;left:2px;width:calc(50% - 2px);height:calc(100% - 4px);background:var(--accent);border-radius:6px;transition:transform .2s;z-index:1}.ns-switch-slider.right{transform:translateX(100%)}.ns-checkbox{position:relative;width:44px;height:24px;flex-shrink:0}.ns-checkbox input{opacity:0;width:0;height:0}.ns-check-slider{position:absolute;inset:0;background:var(--surface-3);border-radius:12px;cursor:pointer;transition:background .2s}.ns-check-slider::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s}.ns-checkbox input:checked+.ns-check-slider{background:var(--accent)}.ns-checkbox input:checked+.ns-check-slider::after{transform:translateX(20px)}.ns-danger-btn{width:100%;padding:9px;background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit}.ns-footer{padding:12px 20px;border-top:1px solid var(--border)}.ns-save-btn{width:100%;padding:13px;background:var(--accent);color:#101420;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit}`;
-    document.body.appendChild(s);
-    o.classList.add('open');
-    _populate();
+  function _toggleTheme() { set('theme', get('theme') === 'dark' ? 'light' : 'dark'); _updateThemeSwitch(); }
+  function _save() {
+    set('userName', document.getElementById('ns-username').value.trim());
+    closeModal(); _toast('Settings saved');
+    window.dispatchEvent(new CustomEvent('novus-settings-changed'));
   }
-  function closeModal() { const o=document.getElementById('novus-settings-overlay'); if(o)o.classList.remove('open'); }
-  function _updateSwitch() { const s=document.getElementById('ns-switch-slider'); const opts=document.querySelectorAll('.ns-switch-option'); if(!s)return; s.classList.toggle('right',get('theme')==='light'); opts.forEach(o=>o.classList.toggle('active',o.dataset.val===get('theme'))); }
-  function _toggleTheme() { set('theme',get('theme')==='dark'?'light':'dark'); _updateSwitch(); }
-  function _save() { const n=document.getElementById('ns-username'); if(n)set('userName',n.value.trim()); closeModal(); if(typeof window.toast==='function')window.toast('Settings saved','green'); window.dispatchEvent(new CustomEvent('novus-settings-changed')); }
+  function _toast(msg) {
+    if (typeof window.toast === 'function') { window.toast(msg, 'green'); return; }
+    const t = document.getElementById('toast');
+    if (t) { const x = document.getElementById('toast-text'); if (x) x.textContent = msg; t.className = 'toast green show'; setTimeout(() => t.classList.remove('show'), 2000); }
+  }
 
   applyTheme();
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', applyTheme);
-
-  return { get, set, getUser, applyTheme, openModal, closeModal, _toggleTheme, _save };
+  return { get, set, getUser, applyTheme, openModal, closeModal, _toggleTheme, _save, _toast };
 })();
+</script>
 
-// ══════════════════════════════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════════════════════════════
-window.toast = function(msg, color='blue') {
-  const t=document.getElementById('toast'); if(!t)return;
-  const x=document.getElementById('toast-text'); if(x)x.textContent=msg;
-  t.className=''; void t.offsetWidth;
-  t.className=`toast ${color} show`;
-  clearTimeout(t._hideTimer);
-  t._hideTimer=setTimeout(()=>t.classList.remove('show'),2500);
-};
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbwZ1Dhmf6cK_hWV2xLKYmwEImUvifIRCPqVm0Fz4E7gjvfcpyzoqhAFIgvgwrjBretc/exec';
+let incidents = [];
+let severity = 'medium';
+let photoBase64 = null;
 
-// ══════════════════════════════════════════════════════════════
-// LOADER
-// ══════════════════════════════════════════════════════════════
-const NovusLoader = (() => {
-  let _bar=null, _progress=0, _raf=null;
-  function _ensureBar() {
-    if(_bar)return;
-    _bar=document.createElement('div');
-    _bar.style.cssText='position:fixed;top:0;left:0;z-index:99999;height:3px;width:0%;background:var(--accent);transition:width .2s ease,opacity .3s ease;border-radius:0 2px 2px 0;box-shadow:0 0 8px var(--accent);pointer-events:none;opacity:0';
-    const a=()=>document.body&&document.body.appendChild(_bar);
-    document.body?a():document.addEventListener('DOMContentLoaded',a);
-  }
-  function start() { _ensureBar();_progress=0;_bar.style.opacity='1';_bar.style.width='0%';_crawl(); }
-  function _crawl() { if(_progress<75){_progress+=(75-_progress)*0.06;_bar.style.width=_progress+'%';_raf=requestAnimationFrame(()=>setTimeout(_crawl,80));} }
-  function done() { cancelAnimationFrame(_raf);if(!_bar)return;_bar.style.transition='width .15s ease,opacity .4s ease .2s';_bar.style.width='100%';setTimeout(()=>{_bar.style.opacity='0';setTimeout(()=>{_bar.style.width='0%';_bar.style.transition='';},400);},150); }
-  function skeletonTableRows(cols,rows=6) { const sh='background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:5px;height:12px;display:block';const w=['60%','45%','55%','40%','50%','65%','35%','50%','40%','55%'];const cells=Array.from({length:cols},(_,i)=>`<td><span style="${sh};width:${w[i%w.length]}"></span></td>`).join('');return Array.from({length:rows},()=>`<tr>${cells}</tr>`).join(''); }
-  function skeletonAisleCards(count=14) { return Array.from({length:count},()=>`<div class="aisle-btn" style="background:linear-gradient(90deg,var(--surface) 25%,var(--surface-2) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;color:transparent;pointer-events:none;min-height:72px">&nbsp;</div>`).join(''); }
-  const _s=document.createElement('style');
-  _s.textContent='@keyframes shimmer{to{background-position:-200% 0}}';
-  document.head?document.head.appendChild(_s):document.addEventListener('DOMContentLoaded',()=>document.head.appendChild(_s));
-  return { start, done, skeletonTableRows, skeletonAisleCards };
-})();
+loadIncidents();
 
-// ══════════════════════════════════════════════════════════════
-// CONSTANTS
-// ══════════════════════════════════════════════════════════════
-const AISLE_ROWS = 'ABCDEFGHJKLMNP'.split('');
-
-// ── Auth guard — redirect to login if not authenticated ──────
-// Call this at the top of each page script
-function requireAuth() {
-  if (!NovusAuth.isLoggedIn()) {
-    window.location.href = 'login.html';
-    return false;
-  }
-  return true;
+async function loadIncidents() {
+  try {
+    const res = await fetch(API_URL + '?type=safety');
+    const data = await res.json();
+    incidents = data.incidents || [];
+  } catch { incidents = []; }
+  renderList();
 }
+
+function renderList() {
+  const list = document.getElementById('incident-list');
+  if (incidents.length === 0) {
+    list.innerHTML = '<div class="empty"><span class="empty-icon">🦺</span><p>No incidents reported</p></div>';
+    return;
+  }
+  list.innerHTML = incidents.map(i => `
+    <div class="inc-card">
+      <div class="inc-top">
+        <span class="inc-sev ${i.severity || 'low'}">${i.severity || 'low'}</span>
+        <span class="inc-status ${i.status || 'open'}">${i.status || 'open'}</span>
+      </div>
+      <div class="inc-loc">📍 ${i.location}</div>
+      <div class="inc-desc">${i.description}</div>
+      <div class="inc-footer">
+        <span>👤 ${i.reportedBy}</span>
+        <span>${new Date(i.timestamp).toLocaleDateString()}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showForm() {
+  switchScreen('form');
+  document.getElementById('f-name').value = NovusSettings.getUser();
+}
+
+function showList() { switchScreen('list'); loadIncidents(); }
+
+function setSev(val, el) {
+  severity = val;
+  document.querySelectorAll('.sev-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function handlePhoto(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    photoBase64 = ev.target.result;
+    document.getElementById('photo-preview').innerHTML = `
+      <div class="preview-wrap">
+        <img src="${photoBase64}" class="preview-img">
+        <button class="preview-remove" onclick="removePhoto()">✕</button>
+      </div>`;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function removePhoto() {
+  photoBase64 = null;
+  document.getElementById('photo-preview').innerHTML = '';
+}
+
+async function submitIncident() {
+  const name = document.getElementById('f-name').value.trim();
+  const location = document.getElementById('f-location').value.trim();
+  const description = document.getElementById('f-desc').value.trim();
+  const resolution = document.getElementById('f-resolution').value.trim();
+
+  if (!name || !location || !description || !resolution) { 
+    toast('Please fill out all required fields', 'amber'); 
+    return; 
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'logSafety',
+        reportedBy: name,
+        location, description, severity,
+        resolution,
+        photoUrl: photoBase64 || '',
+      }),
+    });
+    switchScreen('success');
+    setTimeout(() => { showList(); }, 2000);
+  } catch (err) { toast('Failed to submit: ' + err.message, 'red'); }
+  
+  btn.disabled = false; btn.textContent = 'Submit Report';
+}
+
+function switchScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+}
+
+function toast(msg, color) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-text').textContent = msg;
+  t.className = `toast ${color} show`;
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+window.toast = toast;
+</script>
+
+</body>
+</html>
