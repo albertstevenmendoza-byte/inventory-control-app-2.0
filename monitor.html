@@ -804,10 +804,7 @@ tr:hover td{background:var(--surface-2)}
 <!-- ══════════════════════════════════════
   SCRIPTS
 ════════════════════════════════════════ -->
-<!-- 1. Supabase first -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<!-- 2. Core second -->
 <script src="novus-core.js"></script>
 <script>
 /*
@@ -1435,24 +1432,34 @@ async function _markIncident(newStatus) {
    ADMIN — Double-confirm destructive actions
 ───────────────────────────────────────── */
 
-const CONFIRM_PHRASES = {
-  'clear-counts': `DELETE ${SESSION_ID}`,
-  'archive-sap':  `ARCHIVE SAP`,
-};
-
-const CONFIRM_COPY = {
-  'clear-counts': {
-    title: '⚠ Delete Cycle Count Data',
-    body:  `This will permanently delete ALL cycle count records for session <strong>${SESSION_ID}</strong>. This cannot be undone.`,
-  },
-  'archive-sap': {
-    title: '🗃 Archive SAP Data',
-    body:  `This will delete all SAP upload rows for session <strong>${SESSION_ID}</strong>. Scanner devices will need a fresh XLSX upload.`,
-  },
-};
-
+/*
+  CONFIRM_PHRASES and CONFIRM_COPY are now defined INSIDE _confirmAction.
+  Previously they were top-level consts that referenced SESSION_ID at script
+  boot time — if novus-core.js had not yet run, SESSION_ID was undefined and
+  the initializer threw a ReferenceError, aborting the entire script block
+  before enterTVMode could be registered on window.
+*/
 function _confirmAction(action) {
   pendingAction = action;
+
+  // Lazily built — SESSION_ID is guaranteed available by the time the user
+  // opens the Admin tab and clicks a destructive action button.
+  const CONFIRM_PHRASES = {
+    'clear-counts': `DELETE ${SESSION_ID}`,
+    'archive-sap':  'ARCHIVE SAP',
+  };
+
+  const CONFIRM_COPY = {
+    'clear-counts': {
+      title: '⚠ Delete Cycle Count Data',
+      body:  `This will permanently delete ALL cycle count records for session <strong>${SESSION_ID}</strong>. This cannot be undone.`,
+    },
+    'archive-sap': {
+      title: '🗃 Archive SAP Data',
+      body:  `This will delete all SAP upload rows for session <strong>${SESSION_ID}</strong>. Scanner devices will need a fresh XLSX upload.`,
+    },
+  };
+
   const copy    = CONFIRM_COPY[action];
   const phrase  = CONFIRM_PHRASES[action];
 
@@ -1467,7 +1474,8 @@ function _confirmAction(action) {
 }
 
 function _onConfirmInput() {
-  const phrase  = CONFIRM_PHRASES[pendingAction];
+  // Derive the required phrase directly — no longer relies on the top-level const
+  const phrase  = pendingAction === 'clear-counts' ? `DELETE ${SESSION_ID}` : 'ARCHIVE SAP';
   const entered = document.getElementById('confirm-input').value;
   document.getElementById('btn-destroy').disabled = (entered !== phrase);
 }
