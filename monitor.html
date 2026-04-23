@@ -571,7 +571,7 @@ tr:hover td{background:var(--surface-2)}
           <div class="table-header">
             <div class="table-title" id="table-title">Cycle Count — Loading…</div>
             <div class="table-actions">
-              <button class="action-btn" onclick="exportCSV()">⬇ Export CSV</button>
+              <button class="action-btn" onclick="exportXLSX()">⬇ Export XLSX</button>
               <button class="action-btn green" onclick="finalizeSession()"
                       title="Transitions missing_temp → missing for all unresolved HUs">
                 ✔ Finalize Session
@@ -696,7 +696,7 @@ tr:hover td{background:var(--surface-2)}
         <div class="admin-section">
           <h2>Export Session Data</h2>
           <p>Downloads a CSV of all cycle count records for the current session.</p>
-          <button class="admin-btn primary" onclick="exportCSV()">⬇ Download CSV</button>
+          <button class="admin-btn primary" onclick="exportXLSX()">⬇ Download XLSX</button>
         </div>
       </div>
     </div>
@@ -1302,31 +1302,69 @@ async function finalizeSession() {
    EXPORT CSV
 ───────────────────────────────────────── */
 
-async function exportCSV() {
-  // Fetch all rows for this session (no pagination for export)
+/* ─────────────────────────────────────────
+   EXPORT XLSX
+   Uses SheetJS (already loaded for SAP import) to produce
+   a proper .xlsx file with formatted headers and auto-column widths.
+───────────────────────────────────────── */
+
+async function exportXLSX() {
+  toast('Preparing export…', 'blue');
+
+  // Fetch all rows for this session — no pagination for exports
   const { data, error } = await sb
     .from('cycle_counts')
     .select('*')
     .eq('session_id', SESSION_ID)
     .order('scanned_at', { ascending: false });
 
-  if (error || !data) { toast('Export failed', 'red'); return; }
+  if (error || !data) { toast('Export failed: ' + (error?.message || 'no data'), 'red'); return; }
 
-  const headers = ['HU','Material','Expected Bin','Scanned Bin','Exp Qty','Scn Qty','Type','Notes','Scanned By','Time'];
-  const rows    = data.map(r => [
-    r.hu, r.material || '', r.expected_bin || '', r.scanned_bin,
-    r.expected_qty, r.scanned_qty, r.type, r.notes || '', r.scanned_by || '', r.scanned_at,
+  // Build rows array: header first, then data
+  const headers = [
+    'HU', 'Material', 'Expected Bin', 'Scanned Bin',
+    'Exp Qty', 'Scn Qty', 'Type', 'Notes', 'Scanned By', 'Time',
+  ];
+
+  const rows = data.map(r => [
+    r.hu            || '',
+    r.material      || '',
+    r.expected_bin  || '',
+    r.scanned_bin   || '',
+    r.expected_qty  ?? '',
+    r.scanned_qty   ?? '',
+    r.type          || '',
+    r.notes         || '',
+    r.scanned_by    || '',
+    r.scanned_at    ? new Date(r.scanned_at).toLocaleString('en-US') : '',
   ]);
 
-  const csv  = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `novus-count-${SESSION_ID}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('CSV exported ✓', 'green');
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+  // Auto column widths — measure max character length per column
+  const colWidths = headers.map((h, ci) => {
+    const maxLen = Math.max(
+      h.length,
+      ...rows.map(r => String(r[ci] ?? '').length)
+    );
+    return { wch: Math.min(maxLen + 2, 50) }; // cap at 50 chars
+  });
+  ws['!cols'] = colWidths;
+
+  // Style header row bold via cell metadata
+  headers.forEach((_, ci) => {
+    const addr = XLSX.utils.encode_cell({ r: 0, c: ci });
+    if (!ws[addr]) return;
+    ws[addr].s = { font: { bold: true } };
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Cycle Count');
+
+  // Trigger download
+  XLSX.writeFile(wb, `novus-count-${SESSION_ID}.xlsx`);
+  toast(`Exported ${data.length} rows ✓`, 'green');
 }
 
 /* ─────────────────────────────────────────
@@ -1553,3 +1591,7 @@ document.addEventListener('keydown', e => {
     exitTVMode();
   }
 });
+</script>
+
+</body>
+</html>
