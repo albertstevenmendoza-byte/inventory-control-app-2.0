@@ -600,26 +600,35 @@ document.addEventListener('DOMContentLoaded', () => {
  * it rarely changes mid-count, so caching is safe.
  */
 async function _pullCloud() {
-  // Check localStorage cache keyed by today's date string
-  const cacheKey    = 'novus_sap';
+  const cacheKey     = 'novus_sap';
   const cacheDateKey = 'novus_sap_date';
-  const today       = new Date().toDateString();
+  const cacheVerKey  = 'novus_sap_version_cached';
+  const today        = new Date().toDateString();
 
   const cachedDate = localStorage.getItem(cacheDateKey);
-  if (cachedDate === today) {
+  const cachedVer  = localStorage.getItem(cacheVerKey)  || '0';
+  const uploadVer  = localStorage.getItem('novus_sap_version') || '0';
+  const versionMatch = cachedVer === uploadVer;
+
+  // Use cache only if: same day AND version matches (monitor hasn't re-uploaded) AND has data
+  if (cachedDate === today && versionMatch) {
     try {
       const raw = localStorage.getItem(cacheKey);
       if (raw) {
-        sapData = JSON.parse(raw);
-        _buildIndexes();
-        _buildAisleGrid();
-        toast('SAP data loaded from cache', 'blue');
-        return;
+        const parsed = JSON.parse(raw);
+        if (parsed.length > 0) {
+          sapData = parsed;
+          _buildIndexes();
+          _buildAisleGrid();
+          toast(`${sapData.length} SAP items loaded (cached)`, 'blue');
+          return;
+        }
+        // Cache exists but is empty — fall through to Supabase
       }
     } catch {}
   }
 
-  // Fetch from Supabase
+  // Fetch fresh from Supabase
   try {
     const { data, error } = await sb
       .from('sap_data')
@@ -632,17 +641,20 @@ async function _pullCloud() {
     _buildIndexes();
     _buildAisleGrid();
 
-    // Cache to localStorage (survives page refresh, expires tomorrow)
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(sapData));
-      localStorage.setItem(cacheDateKey, today);
-    } catch {}
-
-    toast(`${sapData.length} SAP items loaded`, 'green');
+    if (sapData.length === 0) {
+      toast('No SAP data found — upload via Control Center', 'amber');
+    } else {
+      toast(`${sapData.length} SAP items loaded`, 'green');
+      // Cache the result
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(sapData));
+        localStorage.setItem(cacheDateKey, today);
+        localStorage.setItem(cacheVerKey, uploadVer); // Stamp the version we cached
+      } catch {}
+    }
   } catch (err) {
     console.error('[scanner] SAP load failed:', err);
     toast('Could not load SAP data — check connection', 'red');
-    // Render empty grid so the app is still usable offline
     _buildAisleGrid();
   }
 }
