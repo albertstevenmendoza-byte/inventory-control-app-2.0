@@ -1273,9 +1273,11 @@ async function _processXlsx(file) {
     const sapRows = rows
       .filter(r => r[huCol] && r[binCol])
       .map(r => {
-        // SAP sometimes exports qty with commas (1,234.5) or units appended — strip non-numeric chars
+        // NOTE: expected_qty is currently integer in DB.
+        // Run the ALTER TABLE SQL in GUIDE.md to support decimals.
+        // Until then, quantities are rounded to the nearest whole number.
         const rawQty = String(r[qtyCol] ?? '').replace(/[^0-9.\-]/g, '');
-        const qty    = parseFloat(rawQty) || 0;
+        const qty    = Math.round(parseFloat(rawQty) || 0);
         return {
           session_id:   SESSION_ID,
           hu:           String(r[huCol]).trim(),
@@ -1307,6 +1309,14 @@ async function _processXlsx(file) {
     status.style.color = 'var(--green)';
     status.textContent = `✅ ${sapRows.length} items uploaded for ${SESSION_ID}`;
     toast(`SAP upload complete — ${sapRows.length} HUs`, 'green');
+
+    // Bust the scanner cache on any device that shares localStorage (same browser).
+    // Cross-device scanners will see the version mismatch on next load and re-fetch.
+    const version = Date.now().toString();
+    localStorage.setItem('novus_sap_version', version);
+    localStorage.removeItem('novus_sap');
+    localStorage.removeItem('novus_sap_date');
+    localStorage.removeItem('novus_sap_version_cached');
 
     // Refresh the aisle breakdown now that SAP data is loaded
     fetchAisleBreakdown();
