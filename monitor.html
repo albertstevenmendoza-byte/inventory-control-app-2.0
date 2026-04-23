@@ -303,6 +303,123 @@ tr:hover td{background:var(--surface-2)}
   margin-bottom:12px;color:var(--accent);
 }
 
+/* ── TV Metric Display ───────────────── */
+.tv-overlay{
+  display:none;position:fixed;inset:0;z-index:5000;
+  background:#080a10;flex-direction:column;
+  font-family:'DM Sans',sans-serif;
+}
+.tv-overlay.open{display:flex}
+
+.tv-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:28px 48px 0;flex-shrink:0;
+}
+.tv-logo{
+  display:flex;align-items:center;gap:14px;
+}
+.tv-logo-text{font-size:13px;font-weight:800;color:rgba(255,255,255,.35);
+  text-transform:uppercase;letter-spacing:2px}
+.tv-session{
+  font-family:'JetBrains Mono',monospace;font-size:12px;
+  color:rgba(255,255,255,.2);font-weight:600;letter-spacing:1px;
+}
+.tv-clock{
+  font-family:'JetBrains Mono',monospace;font-size:18px;
+  font-weight:700;color:rgba(255,255,255,.25);
+}
+.tv-exit-btn{
+  position:fixed;top:20px;right:24px;z-index:5001;
+  background:rgba(255,255,255,.07);color:rgba(255,255,255,.3);
+  border:1px solid rgba(255,255,255,.1);border-radius:8px;
+  padding:8px 16px;font-size:10px;font-weight:800;cursor:pointer;
+  font-family:'DM Sans',sans-serif;letter-spacing:.5px;
+  transition:background .2s,color .2s;
+}
+.tv-exit-btn:hover{background:rgba(255,255,255,.14);color:rgba(255,255,255,.7)}
+
+/* KPI strip */
+.tv-kpis{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:16px;padding:28px 48px 20px;flex-shrink:0;
+}
+.tv-kpi{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);
+  border-radius:20px;padding:28px 24px;text-align:center;
+  position:relative;overflow:hidden;
+}
+/* Subtle accent glow at top */
+.tv-kpi::before{
+  content:'';position:absolute;top:0;left:20%;right:20%;height:1px;
+  background:var(--tv-accent,rgba(91,154,255,.6));
+  box-shadow:0 0 16px 2px var(--tv-accent,rgba(91,154,255,.25));
+}
+.tv-kpi.green{--tv-accent:rgba(52,211,153,.7)}
+.tv-kpi.green .tv-kpi-val{color:#34d399}
+.tv-kpi-val{
+  font-family:'JetBrains Mono',monospace;font-size:56px;font-weight:700;
+  color:#5b9aff;line-height:1;letter-spacing:-2px;
+  /* Animate value changes with opacity only */
+  transition:opacity .25s ease;
+}
+.tv-kpi-val.flash{opacity:.3}
+.tv-kpi-label{
+  font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:2px;color:rgba(255,255,255,.3);margin-top:10px;
+}
+
+/* Aisle grid */
+.tv-aisles-wrap{
+  flex:1;overflow:hidden;padding:0 48px 32px;display:flex;flex-direction:column;
+}
+.tv-aisles-title{
+  font-size:9px;font-weight:800;text-transform:uppercase;
+  letter-spacing:2.5px;color:rgba(255,255,255,.2);margin-bottom:14px;
+}
+.tv-aisle-grid{
+  display:grid;
+  /* Auto-fill columns that are at least 140px — fills the row on any TV width */
+  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:10px;align-content:start;
+}
+.tv-aisle-card{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);
+  border-radius:14px;padding:14px 16px;
+}
+.tv-aisle-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.tv-aisle-letter{
+  font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;
+  color:rgba(255,255,255,.7);line-height:1;
+}
+.tv-aisle-pct{
+  font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;
+  color:rgba(255,255,255,.3);
+}
+.tv-aisle-pct.complete{color:#34d399}
+/* Progress bar — width transition is on transform (translateX trick) so no layout thrash */
+.tv-aisle-bar-track{
+  height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;
+}
+.tv-aisle-bar-fill{
+  height:100%;border-radius:2px;background:#5b9aff;
+  transform-origin:left;
+  transition:transform .5s cubic-bezier(.4,0,.2,1);
+}
+.tv-aisle-bar-fill.complete{background:#34d399}
+.tv-aisle-count{font-size:9px;font-weight:700;color:rgba(255,255,255,.2);margin-top:6px}
+
+/* Live pulse in corner */
+.tv-live{
+  position:fixed;bottom:24px;right:32px;
+  display:flex;align-items:center;gap:8px;
+  font-size:10px;font-weight:800;letter-spacing:2px;
+  text-transform:uppercase;color:rgba(52,211,153,.5);
+}
+.tv-live-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#34d399;animation:pulse-op 1.5s infinite;
+}
+
 /* Confirm modal */
 .confirm-overlay{
   display:none;position:fixed;inset:0;
@@ -353,6 +470,9 @@ tr:hover td{background:var(--surface-2)}
         <div class="live-dot" id="live-dot"></div>
         <span id="live-label">Connecting…</span>
       </div>
+      <button class="home-link" onclick="enterTVMode()" style="cursor:pointer;border:none">
+        📺 TV Mode
+      </button>
       <a href="index.html" class="home-link">← Home</a>
       <button class="gear-btn" onclick="NovusSettings.openModal()">⚙</button>
     </div>
@@ -605,6 +725,58 @@ tr:hover td{background:var(--surface-2)}
       </button>
     </div>
   </div>
+</div>
+
+
+<!-- ── TV Metric Display Overlay ─────── -->
+<div class="tv-overlay" id="tv-overlay">
+
+  <button class="tv-exit-btn" onclick="exitTVMode()">✕ Exit TV Mode</button>
+
+  <div class="tv-header">
+    <div class="tv-logo">
+      <span style="font-size:22px">🏭</span>
+      <div>
+        <div class="tv-logo-text">Novus Foods · Plant 1730</div>
+        <div class="tv-session" id="tv-session-id">—</div>
+      </div>
+    </div>
+    <div class="tv-clock" id="tv-clock">—</div>
+  </div>
+
+  <!-- 4 KPI cards -->
+  <div class="tv-kpis">
+    <div class="tv-kpi">
+      <div class="tv-kpi-val" id="tv-bins">—</div>
+      <div class="tv-kpi-label">Bins Counted</div>
+    </div>
+    <div class="tv-kpi">
+      <div class="tv-kpi-val" id="tv-items">—</div>
+      <div class="tv-kpi-label">HUs Scanned</div>
+    </div>
+    <div class="tv-kpi green">
+      <div class="tv-kpi-val" id="tv-bin-acc">—</div>
+      <div class="tv-kpi-label">Bin Accuracy</div>
+    </div>
+    <div class="tv-kpi green">
+      <div class="tv-kpi-val" id="tv-inv-acc">—</div>
+      <div class="tv-kpi-label">Inv. Accuracy</div>
+    </div>
+  </div>
+
+  <!-- Per-aisle completion grid -->
+  <div class="tv-aisles-wrap">
+    <div class="tv-aisles-title">Aisle Completion</div>
+    <div class="tv-aisle-grid" id="tv-aisle-grid">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <div class="tv-live">
+    <div class="tv-live-dot"></div>
+    Live
+  </div>
+
 </div>
 
 
@@ -899,53 +1071,119 @@ async function fetchKPIs() {
 
   if (error || !data) return;
 
-  const totalItems = data.length;
-  const okItems    = data.filter(r => r.type === 'ok').length;
+  const totalItems  = data.length;
+  const okItems     = data.filter(r => r.type === 'ok').length;
 
-  // Group by bin
+  // Group by bin for Bin Accuracy calculation
   const bins = {};
   for (const r of data) {
     if (!bins[r.scanned_bin]) bins[r.scanned_bin] = [];
     bins[r.scanned_bin].push(r.type);
   }
-  const totalBins  = Object.keys(bins).length;
+  const totalBins   = Object.keys(bins).length;
   const perfectBins = Object.values(bins).filter(types => types.every(t => t === 'ok')).length;
 
-  const binAcc  = totalBins  ? Math.round((perfectBins / totalBins) * 100) : 0;
-  const invAcc  = totalItems ? Math.round((okItems / totalItems) * 100)    : 0;
+  const binAcc = totalBins  ? Math.round((perfectBins / totalBins) * 100) : 0;
+  const invAcc = totalItems ? Math.round((okItems / totalItems) * 100)    : 0;
 
+  // Update sidebar KPIs
   document.getElementById('kpi-bins').textContent    = totalBins;
   document.getElementById('kpi-items').textContent   = totalItems;
   document.getElementById('kpi-bin-acc').textContent = `${binAcc}%`;
   document.getElementById('kpi-inv-acc').textContent = `${invAcc}%`;
+
+  // Update TV overlay KPIs with a brief flash to signal a new value
+  _tvSetVal('tv-bins',    totalBins);
+  _tvSetVal('tv-items',   totalItems);
+  _tvSetVal('tv-bin-acc', `${binAcc}%`);
+  _tvSetVal('tv-inv-acc', `${invAcc}%`);
 }
 
 /**
- * fetchAisleBreakdown — shows per-aisle bin counts in the sidebar.
+ * _tvSetVal — updates a TV KPI element and flashes it if the value changed.
+ * Uses opacity transition only (hardware-accelerated, no layout).
+ */
+function _tvSetVal(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.textContent === String(val)) return; // No change — skip flash
+  el.classList.add('flash');
+  setTimeout(() => {
+    el.textContent = val;
+    el.classList.remove('flash');
+  }, 200);
+}
+
+/**
+ * fetchAisleBreakdown — shows per-aisle completion in sidebar and TV display.
+ *
+ * Cross-references sap_data (total bins per aisle) with cycle_counts
+ * (scanned bins per aisle) to compute a completion percentage per aisle.
  */
 async function fetchAisleBreakdown() {
-  const { data } = await sb
-    .from('cycle_counts')
-    .select('scanned_bin')
-    .eq('session_id', SESSION_ID);
+  // Fetch both tables in parallel — one round-trip
+  const [sapRes, ccRes] = await Promise.all([
+    sb.from('sap_data').select('expected_bin').eq('session_id', SESSION_ID),
+    sb.from('cycle_counts').select('scanned_bin').eq('session_id', SESSION_ID),
+  ]);
 
-  if (!data) return;
-
-  const aisleMap = {};
-  for (const r of data) {
-    const aisle = r.scanned_bin?.[0] || '?';
-    aisleMap[aisle] = (aisleMap[aisle] || 0) + 1;
+  // Total unique bins per aisle from SAP data
+  const sapBins = {};
+  for (const r of (sapRes.data || [])) {
+    const aisle = r.expected_bin?.[0] || '?';
+    if (!sapBins[aisle]) sapBins[aisle] = new Set();
+    sapBins[aisle].add(r.expected_bin);
   }
 
-  let html = '';
-  for (const [letter, count] of Object.entries(aisleMap).sort()) {
-    html += `<div class="aisle-row">
-      <span class="a-letter">${escHtml(letter)}</span>
-      <span class="a-count">${count} HUs</span>
+  // Scanned unique bins per aisle from cycle_counts
+  const scannedBins = {};
+  for (const r of (ccRes.data || [])) {
+    const aisle = r.scanned_bin?.[0] || '?';
+    if (!scannedBins[aisle]) scannedBins[aisle] = new Set();
+    scannedBins[aisle].add(r.scanned_bin);
+  }
+
+  // All aisles = union of SAP and scanned aisles
+  const allAisles = [...new Set([...Object.keys(sapBins), ...Object.keys(scannedBins)])].sort();
+
+  // ── Sidebar ──────────────────────────────────────────
+  let sidebarHtml = '';
+  for (const aisle of allAisles) {
+    const total   = sapBins[aisle]?.size    || 0;
+    const scanned = scannedBins[aisle]?.size || 0;
+    sidebarHtml += `<div class="aisle-row">
+      <span class="a-letter">${escHtml(aisle)}</span>
+      <span class="a-count">${scanned}/${total} bins</span>
+      <span class="a-done">${total ? Math.round((scanned/total)*100) : 0}%</span>
     </div>`;
   }
+  document.getElementById('aisle-list').innerHTML =
+    sidebarHtml || '<div style="padding:8px;font-size:11px;color:var(--text-3)">No data yet</div>';
 
-  document.getElementById('aisle-list').innerHTML = html || '<div style="padding:8px;font-size:11px;color:var(--text-3)">No data yet</div>';
+  // ── TV Aisle Grid ─────────────────────────────────────
+  let tvHtml = '';
+  for (const aisle of allAisles) {
+    const total    = sapBins[aisle]?.size    || 0;
+    const scanned  = scannedBins[aisle]?.size || 0;
+    const pct      = total ? Math.round((scanned / total) * 100) : 0;
+    const complete = pct === 100;
+
+    // Use translateX to animate the bar fill — no width change = no layout thrash
+    tvHtml += `
+      <div class="tv-aisle-card">
+        <div class="tv-aisle-top">
+          <span class="tv-aisle-letter">${escHtml(aisle)}</span>
+          <span class="tv-aisle-pct${complete ? ' complete' : ''}">${pct}%</span>
+        </div>
+        <div class="tv-aisle-bar-track">
+          <div class="tv-aisle-bar-fill${complete ? ' complete' : ''}"
+               style="transform:scaleX(${pct/100});"></div>
+        </div>
+        <div class="tv-aisle-count">${scanned} / ${total} bins</div>
+      </div>`;
+  }
+  document.getElementById('tv-aisle-grid').innerHTML =
+    tvHtml || '<div style="color:rgba(255,255,255,.2);font-size:12px;padding:20px">Waiting for scan data…</div>';
 }
 
 /* ─────────────────────────────────────────
@@ -1260,8 +1498,47 @@ async function _executeConfirm() {
     if (error) { toast('Archive failed: ' + error.message, 'red'); return; }
     toast('SAP data archived ✓', 'green');
   }
-}
-</script>
+}/* ─────────────────────────────────────────
+   TV MODE
+───────────────────────────────────────── */
 
-</body>
-</html>
+let _tvClockInterval = null;
+
+function enterTVMode() {
+  const overlay = document.getElementById('tv-overlay');
+  overlay.classList.add('open');
+
+  // Populate session label
+  document.getElementById('tv-session-id').textContent = SESSION_ID;
+
+  // Start live clock
+  _tvTick();
+  _tvClockInterval = setInterval(_tvTick, 1000);
+
+  // Push current data immediately (no waiting for next Realtime event)
+  fetchKPIs();
+  fetchAisleBreakdown();
+
+  // Request fullscreen if supported
+  if (overlay.requestFullscreen) overlay.requestFullscreen().catch(() => {});
+}
+
+function exitTVMode() {
+  document.getElementById('tv-overlay').classList.remove('open');
+  clearInterval(_tvClockInterval);
+  _tvClockInterval = null;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
+function _tvTick() {
+  document.getElementById('tv-clock').textContent = new Date().toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
+  });
+}
+
+// Also exit TV mode on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('tv-overlay').classList.contains('open')) {
+    exitTVMode();
+  }
+});
