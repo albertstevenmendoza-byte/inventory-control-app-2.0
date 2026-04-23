@@ -1208,10 +1208,13 @@ function _onFileSelect(input) {
  *
  * Handles flexible SAP column headers via _col() fuzzy matcher.
  * Inserts in batches of 200 to stay within Supabase payload limits.
+ * On column detection failure, shows detected headers so the user
+ * can report what their SAP export actually contains.
  */
 async function _processXlsx(file) {
   const status = document.getElementById('upload-status');
-  status.textContent = '⏳ Parsing…';
+  status.style.color = 'var(--text-3)';
+  status.textContent = '⏳ Parsing file…';
 
   try {
     const buf  = await file.arrayBuffer();
@@ -1219,59 +1222,100 @@ async function _processXlsx(file) {
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-    if (!rows.length) { status.textContent = '❌ No data found in file'; return; }
-
-    // Flexible column matching — handles varying SAP export headers
-    const headers = Object.keys(rows[0]);
-    const _col = (...candidates) =>
-      headers.find(h => candidates.some(c => h.toLowerCase().includes(c.toLowerCase()))) || '';
-
-    const huCol   = _col('hu','handling unit','hu number');
-    const binCol  = _col('bin','whse bin','warehouse bin','storage bin');
-    const qtyCol  = _col('qty','quantity','count');
-    const matCol  = _col('material','material number','matnr');
-    const descCol = _col('description','material description','text');
-
-    if (!huCol || !binCol) {
-      status.textContent = '❌ Could not find HU or Bin columns. Check your XLSX.';
+    if (!rows.length) {
+      status.style.color = 'var(--red)';
+      status.textContent = '❌ No data rows found in file.';
       return;
     }
 
-    // First, clear existing sap_data for this session to avoid duplicates
-    await sb.from('sap_data').delete().eq('session_id', SESSION_ID);
+    const headers = Object.keys(rows[0]);
 
-    const user     = NovusSettings.getUser() || 'Admin';
-    const sapRows  = rows
+    /*
+      _col() — fuzzy column finder.
+      Strips spaces/hyphens and lowercases before comparing so
+      "Handling Unit" and "handlingunit" both match 'handling unit'.
+    */
+    const _col = (...candidates) =>
+      headers.find(h => {
+        const norm = h.toLowerCase().replace(/[\s\-_]+/g, '');
+        return candidates.some(c => {
+          const cn = c.toLowerCase().replace(/[\s\-_]+/g, '');
+          return norm.includes(cn) || cn.includes(norm);
+        });
+      }) || '';
+
+    // Extended candidate lists to cover more SAP export variants
+    const huCol   = _col('hu', 'handling unit', 'handlingunit', 'hu number', 'storage unit', 'storageunit', 'su number', 'sunumber', 'huid', 'hu id');
+    const binCol  = _col('bin', 'whse bin', 'warehouse bin', 'storage bin', 'storage location', 'storageloc', 'sloc', 'location', 'bin location', 'warehouse location', 'dest bin', 'destination');
+    const qtyCol  = _col('qty', 'quantity', 'count', 'total qty', 'available', 'stock', 'avail');
+    const matCol  = _col('material', 'material number', 'matnr', 'mat', 'item', 'product', 'sku', 'article');
+    const descCol = _col('description', 'material description', 'text', 'mat desc', 'item desc', 'name');
+
+    // If critical columns not found, show the actual headers so the user can report them
+    if (!huCol || !binCol) {
+      status.style.color = 'var(--red)';
+      const found = headers.slice(0, 10).join(' | ');
+      status.textContent = `❌ Could not detect HU or Bin column.`
+        + (huCol ? '' : ` No HU column found.`)
+        + (binCol ? '' : ` No Bin column found.`)
+        + ` Detected headers: [${found}${headers.length > 10 ? '…' : ''}]`;
+      console.error('[monitor] SAP column detection failed. Full headers:', headers);
+      return;
+    }
+
+    status.textContent = `⏳ Detected — HU: "${huCol}" | Bin: "${binCol}" | Qty: "${qtyCol || 'not found'}" — clearing old data…`;
+
+    // Clear existing sap_data for this session before re-uploading
+    const { error: delErr } = await sb.from('sap_data').delete().eq('session_id', SESSION_ID);
+    if (delErr) throw delErr;
+
+    const user    = NovusSettings.getUser() || 'Admin';
+    const sapRows = rows
       .filter(r => r[huCol] && r[binCol])
-      .map(r => ({
-        session_id:   SESSION_ID,
-        hu:           String(r[huCol]).trim(),
-        expected_bin: String(r[binCol]).trim().toUpperCase(),
-        expected_qty: parseFloat(r[qtyCol]) || 0,
-        material:     matCol  ? String(r[matCol]).trim()  : null,
-        description:  descCol ? String(r[descCol]).trim() : null,
-        uploaded_by:  user,
-      }));
+      .map(r => {
+        // SAP sometimes exports qty with commas (1,234.5) or units appended — strip non-numeric chars
+        const rawQty = String(r[qtyCol] ?? '').replace(/[^0-9.\-]/g, '');
+        const qty    = parseFloat(rawQty) || 0;
+        return {
+          session_id:   SESSION_ID,
+          hu:           String(r[huCol]).trim(),
+          expected_bin: String(r[binCol]).trim().toUpperCase(),
+          expected_qty: qty,
+          material:     matCol  ? String(r[matCol]).trim()  : null,
+          description:  descCol ? String(r[descCol]).trim() : null,
+          uploaded_by:  user,
+        };
+      });
+
+    if (!sapRows.length) {
+      status.style.color = 'var(--amber)';
+      status.textContent = `⚠ Columns found but no valid rows (HU="${huCol}", Bin="${binCol}"). Check for empty values.`;
+      return;
+    }
 
     // Batch insert in chunks of 200
-    const CHUNK = 200;
+    const CHUNK    = 200;
     let   inserted = 0;
     for (let i = 0; i < sapRows.length; i += CHUNK) {
       const chunk = sapRows.slice(i, i + CHUNK);
       const { error } = await sb.from('sap_data').insert(chunk);
       if (error) throw error;
       inserted += chunk.length;
-      status.textContent = `⏳ Uploading… ${inserted}/${sapRows.length}`;
+      status.textContent = `⏳ Uploading… ${inserted} / ${sapRows.length}`;
     }
 
-    // Invalidate scanner cache on all devices by updating a shared key
+    status.style.color = 'var(--green)';
     status.textContent = `✅ ${sapRows.length} items uploaded for ${SESSION_ID}`;
     toast(`SAP upload complete — ${sapRows.length} HUs`, 'green');
 
+    // Refresh the aisle breakdown now that SAP data is loaded
+    fetchAisleBreakdown();
+
   } catch (err) {
     console.error('[monitor] SAP upload error:', err);
+    status.style.color = 'var(--red)';
     status.textContent = `❌ Upload failed: ${err.message}`;
-    toast('Upload failed — see console', 'red');
+    toast('Upload failed — see status below', 'red');
   }
 }
 
