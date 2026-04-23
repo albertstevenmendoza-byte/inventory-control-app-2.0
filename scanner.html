@@ -599,73 +599,88 @@ document.addEventListener('DOMContentLoaded', () => {
  * sap_data is uploaded once per session in monitor.html;
  * it rarely changes mid-count, so caching is safe.
  */
-async function _pullCloud() {
+async function pullCloud() {
+  NovusLoader.start();
+ 
   const cacheKey     = 'novus_sap';
   const cacheDateKey = 'novus_sap_date';
   const cacheVerKey  = 'novus_sap_version_cached';
   const today        = new Date().toDateString();
-
-  const cachedDate = localStorage.getItem(cacheDateKey);
-  const cachedVer  = localStorage.getItem(cacheVerKey)  || '0';
-  const uploadVer  = localStorage.getItem('novus_sap_version') || '0';
-  const versionMatch = cachedVer === uploadVer;
-
-  // Use cache only if: same day AND version matches (monitor hasn't re-uploaded) AND has data
-  if (cachedDate === today && versionMatch) {
+  const cachedDate   = localStorage.getItem(cacheDateKey);
+  const cachedVer    = localStorage.getItem(cacheVerKey)          || '0';
+  const uploadVer    = localStorage.getItem('novus_sap_version')  || '0';
+ 
+  if (cachedDate === today && cachedVer === uploadVer) {
     try {
       const raw = localStorage.getItem(cacheKey);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed.length > 0) {
-          sapData = parsed;
-          _buildIndexes();
-          _buildAisleGrid();
-          toast(`${sapData.length} SAP items loaded (cached)`, 'blue');
+          sapMaster = parsed;
+          buildIndexes(); showSetup();
+          toast(`${sapMaster.length.toLocaleString()} items loaded (cached)`, 'blue');
+          NovusLoader.done();
           return;
         }
-        // Cache exists but is empty — fall through to Supabase
       }
     } catch {}
   }
-
-  // Fetch fresh from Supabase — paginate to bypass the 1000-row default limit
+ 
   try {
-    let allData  = [];
-    let from     = 0;
-    const CHUNK  = 1000;
-
+    // Paginated fetch — bypasses Supabase 1000-row limit
+    let allData = [], from = 0;
+    const CHUNK = 1000;
     while (true) {
       const { data, error } = await sb
         .from('sap_data')
         .select('*')
         .eq('session_id', SESSION_ID)
         .range(from, from + CHUNK - 1);
-
       if (error) throw error;
       allData = allData.concat(data || []);
-      if (!data || data.length < CHUNK) break; // Last page reached
+      if (!data || data.length < CHUNK) break;
       from += CHUNK;
     }
-
-    sapData = allData;
-    _buildIndexes();
-    _buildAisleGrid();
-
-    if (sapData.length === 0) {
+ 
+    // Map Supabase column names → sapMaster format used by 2.0 scanner
+    sapMaster = allData.map(r => ({
+      sapBin:    String(r.expected_bin       || '').trim().toUpperCase(),
+      hu:        String(r.hu                 || '').trim(),
+      product:   String(r.material           || '').trim(),
+      batch:     String(r.batch              || '').trim(),
+      desc:      String(r.description        || '').trim(),
+      sapQty:    Number(r.expected_qty)      || 0,
+      unit:      String(r.unit               || 'LB').trim(),
+      stockType: String(r.stock_type         || '').trim(),
+      sled:      String(r.sled               || '').trim(),
+    }));
+ 
+    // Cache for same-day use
+    try {
+      localStorage.setItem(cacheKey,     JSON.stringify(sapMaster));
+      localStorage.setItem(cacheDateKey, today);
+      localStorage.setItem(cacheVerKey,  uploadVer);
+    } catch {}
+ 
+    buildIndexes();
+    showSetup();
+ 
+    if (sapMaster.length === 0) {
       toast('No SAP data found — upload via Control Center', 'amber');
     } else {
-      toast(`${sapData.length} SAP items loaded`, 'green');
-      // Cache the result
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(sapData));
-        localStorage.setItem(cacheDateKey, today);
-        localStorage.setItem(cacheVerKey, uploadVer); // Stamp the version we cached
-      } catch {}
+      toast(`${sapMaster.length.toLocaleString()} items loaded`, 'blue');
     }
   } catch (err) {
     console.error('[scanner] SAP load failed:', err);
-    toast('Could not load SAP data — check connection', 'red');
-    _buildAisleGrid();
+    isOnline = false; updateSyncDot();
+    if (sapMaster.length > 0) {
+      buildIndexes(); showSetup();
+      toast('Offline — cached data', 'amber');
+    } else {
+      _showNoData();
+    }
+  } finally {
+    NovusLoader.done();
   }
 }
 
@@ -674,11 +689,23 @@ async function _pullCloud() {
  * Clears localStorage cache and re-fetches from Supabase.
  */
 async function refreshAll() {
+  // Clear all cache keys so pullCloud fetches fresh from Supabase
   localStorage.removeItem('novus_sap');
   localStorage.removeItem('novus_sap_date');
-  document.getElementById('aisle-grid').innerHTML =
-    '<div class="skeleton" style="height:72px;border-radius:14px;grid-column:1/-1"></div>'.repeat(4);
-  await _pullCloud();
+  localStorage.removeItem('novus_sap_version_cached');
+ 
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = '…'; btn.style.opacity = '.5'; btn.style.pointerEvents = 'none';
+ 
+  await pullCloud();
+ 
+  btn.textContent = '↻'; btn.style.opacity = ''; btn.style.pointerEvents = '';
+ 
+  if (completedBins.size > 0 && confirm('New SAP data loaded!\n\nClear "Already Counted" bins?')) {
+    completedBins.clear();
+    localStorage.setItem('novus_done', JSON.stringify({ date: new Date().toDateString(), bins: [] }));
+    updateDoneCount(); buildAisleGrid();
+  }
 }
 
 /**
@@ -720,33 +747,44 @@ async function _sbInsert(rows) {
   if (error) throw error;
 }
 
-/**
- * sendPayload — wraps _sbInsert with optimistic UI + offline fallback.
- *
- * Optimistic: the UI already advanced (bin marked done, moved to next)
- * before this call. If Supabase fails, we queue the rows and show a
- * warning rather than rolling back — the count continues uninterrupted.
- *
- * @param {Array<object>} rows      — rows ready for cycle_counts table
- * @param {string}        successMsg — toast text on success
- * @returns {boolean} true if sent or queued; false only on logic errors
- */
-async function sendPayload(rows, successMsg) {
+  
+function _payloadToRows(payload) {
+  const { user, bin, aisle, auditMode, items } = payload;
+  return (items || []).map(item => ({
+    session_id:   SESSION_ID,
+    hu:           item.hu        || 'UNKNOWN',
+    expected_bin: item.sapBin    || null,
+    scanned_bin:  bin,
+    aisle:        aisle          || (bin ? bin.charAt(1) : null),
+    expected_qty: item.sapQty    || 0,
+    scanned_qty:  item.countQty  || 0,
+    type:         item.type,
+    notes:        item.note      || null,
+    scanned_by:   user,
+    material:     item.product   || null,
+    description:  item.desc      || null,
+    batch:        item.batch     || null,
+    unit:         item.unit      || 'LB',
+    sled:         item.sled      || null,
+    sled_status:  item.sledStatus|| null,
+    audit_mode:   auditMode      || 'standard',
+  }));
+}
+  
+async function sendPayload(payload, successMsg) {
+  const rows = _payloadToRows(payload);
   try {
-    await _sbInsert(rows);
-    isOnline = true;
-    _updateSyncDot();
+    const { error } = await sb.from('cycle_counts').insert(rows);
+    if (error) throw error;
+    isOnline = true; updateSyncDot();
     if (successMsg) toast(successMsg, 'green');
     return true;
   } catch (err) {
     console.warn('[scanner] Insert failed, queuing:', err.message);
-    offlineQueue.push(rows);
-    _saveQueue();
-    _updateQueueBadge();
-    isOnline = false;
-    _updateSyncDot();
+    _enqueue(payload);
+    isOnline = false; updateSyncDot();
     toast('Saved offline — will sync when connected', 'amber');
-    return true; // UI still marks bin done locally
+    return true; // UI still advances optimistically
   }
 }
 
@@ -754,28 +792,21 @@ async function sendPayload(rows, successMsg) {
  * _flushQueue — retry all queued row-batches when back online.
  * Called every 15 seconds and on 'online' event.
  */
-async function _flushQueue() {
-  if (!offlineQueue.length || !isOnline) return;
-
-  const batch  = [...offlineQueue];
-  offlineQueue = [];
-
+async function flushQueue() {
+  if (!offlineQueue.length) return;
+  const batch = [...offlineQueue]; offlineQueue = [];
   const failed = [];
-  for (const rows of batch) {
+  for (const payload of batch) {
     try {
-      await _sbInsert(rows);
-    } catch {
-      failed.push(rows);
-    }
+      const rows = _payloadToRows(payload);
+      const { error } = await sb.from('cycle_counts').insert(rows);
+      if (error) throw error;
+    } catch { failed.push(payload); }
   }
-
   offlineQueue = failed;
-  _saveQueue();
-  _updateQueueBadge();
-
-  if (!failed.length && batch.length > 0) {
-    toast(`${batch.length} batch${batch.length > 1 ? 'es' : ''} synced ✓`, 'green');
-  }
+  localStorage.setItem('novus_queue', JSON.stringify(offlineQueue));
+  updateQueueBadge();
+  if (!failed.length && batch.length) toast(`${batch.length} batch(es) synced ✓`, 'green');
 }
 
 /* ─────────────────────────────────────────
