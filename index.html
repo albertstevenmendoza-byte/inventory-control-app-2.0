@@ -107,44 +107,68 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
   <div class="api-bar">
     <span class="api-dot loading" id="api-dot"></span>
-    <span id="api-text">Connecting to API…</span>
+    <span id="api-text">Connecting to Supabase…</span>
   </div>
   <div class="footer">
     <span>Novus Foods · Buena Park, CA</span>
     <button class="gear-btn" onclick="NovusSettings.openModal()">⚙ Settings</button>
   </div>
 </div>
+
 <!-- 1. Supabase first -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<!-- 2. Core second -->
+<!-- 2. Core second — initializes window.sb, window.SESSION_ID, window.NovusSettings -->
 <script src="novus-core.js"></script>
 <script>
 (async () => {
   const dot  = document.getElementById('api-dot');
   const text = document.getElementById('api-text');
 
+  /* Update a KPI box value and clear the shimmer skeleton */
   function setKPI(id, val, colorClass = '') {
     const el = document.getElementById(id);
     el.className = 'kpi-val' + (colorClass ? ' ' + colorClass : '');
     el.style = '';
     el.textContent = val;
   }
+
+  /* Update a nav card live badge */
   function setLive(badgeId, textId, label, cls) {
     document.getElementById(badgeId).className = 'nc-live ' + cls;
     document.getElementById(textId).textContent = label;
   }
 
   try {
-    const res  = await fetch(API_URL + '?type=poll', { redirect: 'follow' });
-    const raw  = await res.text();
-    const data = JSON.parse(raw);
+    /*
+      Fetch all three data sources in parallel — one network round-trip.
+      SESSION_ID is defined by novus-core.js as 'S-YYYY-MM-DD'.
 
-    const report     = data.report || [];
-    const sapCount   = data.sapMeta?.rowCount || 0;
-    const safetyOpen = data.safetyOpen || 0;
+      cycle_counts: only fetch scanned_bin + type (no full rows needed for KPIs)
+      sap_data:     count-only query (head:true) — zero data transferred
+      safety_incidents: fetch open incidents only
+    */
+    const [ccRes, sapRes, safetyRes] = await Promise.all([
+      sb
+        .from('cycle_counts')
+        .select('scanned_bin, type')
+        .eq('session_id', SESSION_ID)
+        .neq('hu', 'EMPTY'),
+      sb
+        .from('sap_data')
+        .select('*', { count: 'exact', head: true })
+        .eq('session_id', SESSION_ID),
+      sb
+        .from('safety_incidents')
+        .select('id')
+        .eq('status', 'open'),
+    ]);
 
-    const bins = new Set(report.map(r => r.scanBin).filter(Boolean)).size;
+    const report     = ccRes.data    || [];
+    const sapCount   = sapRes.count  || 0;
+    const safetyOpen = (safetyRes.data || []).length;
+
+    /* Compute KPIs client-side from the lightweight fetch */
+    const bins = new Set(report.map(r => r.scanned_bin).filter(Boolean)).size;
     const ok   = report.filter(r => r.type === 'ok').length;
     const disc = report.filter(r => r.type !== 'ok').length;
 
@@ -153,31 +177,43 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     setKPI('kpi-disc', disc, disc > 0 ? 'amber' : 'green');
     setKPI('kpi-sap',  Number(sapCount).toLocaleString());
 
-    setLive('live-scanner','live-scanner-text', `${bins} bin${bins!==1?'s':''} counted today`, bins > 0 ? 'ok' : '');
+    /* Nav card live badges */
+    setLive('live-scanner', 'live-scanner-text',
+      `${bins} bin${bins !== 1 ? 's' : ''} counted today`,
+      bins > 0 ? 'ok' : '');
+
     if (safetyOpen > 0) {
-      setLive('live-safety','live-safety-text', `${safetyOpen} open incident${safetyOpen>1?'s':''}`, 'alert');
+      setLive('live-safety', 'live-safety-text',
+        `${safetyOpen} open incident${safetyOpen > 1 ? 's' : ''}`, 'alert');
     } else {
-      setLive('live-safety','live-safety-text', 'No open incidents', 'ok');
+      setLive('live-safety', 'live-safety-text', 'No open incidents', 'ok');
     }
-    setLive('live-monitor','live-monitor-text', `${Number(sapCount).toLocaleString()} SAP items`, sapCount > 0 ? 'ok' : 'warn');
 
-    dot.className  = 'api-dot ok';
-    text.textContent = `API connected · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+    setLive('live-monitor', 'live-monitor-text',
+      `${Number(sapCount).toLocaleString()} SAP items`,
+      sapCount > 0 ? 'ok' : 'warn');
 
+    /* Connection status bar */
+    dot.className    = 'api-dot ok';
+    text.textContent = `Supabase connected · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+    /* Personalised greeting if user has set a name */
     const name = NovusSettings.getUser();
     if (name) {
       const h = new Date().getHours();
       const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
       document.getElementById('hero-sub').textContent = `${g}, ${name}`;
     }
+
   } catch (err) {
-    dot.className  = 'api-dot err';
-    text.textContent = 'API not reachable — check Apps Script URL';
-    setKPI('kpi-bins','—'); setKPI('kpi-ok','—');
-    setKPI('kpi-disc','—'); setKPI('kpi-sap','—');
-    setLive('live-scanner','live-scanner-text','Offline','warn');
-    setLive('live-safety', 'live-safety-text', 'Offline','warn');
-    setLive('live-monitor','live-monitor-text','Offline','warn');
+    console.error('[index] Supabase error:', err);
+    dot.className    = 'api-dot err';
+    text.textContent = 'Supabase not reachable — check credentials in novus-core.js';
+    setKPI('kpi-bins', '—'); setKPI('kpi-ok',   '—');
+    setKPI('kpi-disc', '—'); setKPI('kpi-sap',  '—');
+    setLive('live-scanner', 'live-scanner-text', 'Offline', 'warn');
+    setLive('live-safety',  'live-safety-text',  'Offline', 'warn');
+    setLive('live-monitor', 'live-monitor-text', 'Offline', 'warn');
   }
 })();
 </script>
