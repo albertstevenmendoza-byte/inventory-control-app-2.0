@@ -898,18 +898,34 @@ function updateMetrics() {
   // Count unique scanned bins for the "Bins Counted" KPI display
   const totalBins = new Set(huRows.map(r => r.scanBin).filter(Boolean)).size;
 
+  // Deduplicate moves: a moved HU produces two records —
+  //   missing_temp at its expected bin  (HU wasn't found there)
+  //   move / move_adj at its actual bin (HU found here instead)
+  // Both referencing the same HU would double-count one discrepancy.
+  // Solution: for any HU that has a move/move_adj record, drop its missing_temp twin.
+  const movedHUs = new Set(
+    huRows
+      .filter(r => r.type === 'move' || r.type === 'move_adj')
+      .map(r => r.hu)
+      .filter(Boolean)
+  );
+  const effectiveRows = huRows.filter(r =>
+    !(r.type === 'missing_temp' && movedHUs.has(r.hu))
+  );
+  const effectiveTotal = effectiveRows.length;
+
   // Bin Accuracy  = (1 - wrong_items  / total_items) x 100
   // "wrong items" = HUs found in wrong bin location (move, move_adj, unexpected)
-  const wrongBin = huRows.filter(r =>
+  const wrongBin = effectiveRows.filter(r =>
     r.type === 'move' || r.type === 'move_adj' || r.type === 'unexpected'
   ).length;
 
   // Inventory Accuracy = (1 - discrepancies / total_items) x 100
   // "discrepancies" = any HU that is not OK (adj, move, missing, unexpected, etc.)
-  const discrepancies = huRows.filter(r => r.type !== 'ok').length;
+  const discrepancies = effectiveRows.filter(r => r.type !== 'ok').length;
 
-  const binAccNum = total > 0 ? (1 - wrongBin      / total) * 100 : null;
-  const invAccNum = total > 0 ? (1 - discrepancies / total) * 100 : null;
+  const binAccNum = effectiveTotal > 0 ? (1 - wrongBin      / effectiveTotal) * 100 : null;
+  const invAccNum = effectiveTotal > 0 ? (1 - discrepancies / effectiveTotal) * 100 : null;
   const binAcc    = binAccNum !== null ? binAccNum.toFixed(1) + '%' : '—';
   const invAcc    = invAccNum !== null ? invAccNum.toFixed(1) + '%' : '—';
 
@@ -1576,12 +1592,20 @@ async function _fetchKPIsForTV() {
     if (data.length < CHUNK) break;
     from += CHUNK;
   }
-  const totalItems   = allData.length;
-  // Bin Accuracy  = (1 - wrong_items / total) x 100
-  const wrongBin     = allData.filter(r => r.type === 'move' || r.type === 'move_adj' || r.type === 'unexpected').length;
-  // Inventory Accuracy = (1 - discrepancies / total) x 100
-  const discrepancies = allData.filter(r => r.type !== 'ok').length;
-  const totalBins    = new Set(allData.map(r => r.scanned_bin).filter(Boolean)).size;
+  // Deduplicate moves (same logic as updateMetrics)
+  const movedHUs = new Set(
+    allData
+      .filter(r => r.type === 'move' || r.type === 'move_adj')
+      .map(r => r.hu)
+      .filter(Boolean)
+  );
+  const effectiveRows = allData.filter(r =>
+    !(r.type === 'missing_temp' && movedHUs.has(r.hu))
+  );
+  const totalItems    = effectiveRows.length;
+  const totalBins     = new Set(effectiveRows.map(r => r.scanned_bin).filter(Boolean)).size;
+  const wrongBin      = effectiveRows.filter(r => r.type === 'move' || r.type === 'move_adj' || r.type === 'unexpected').length;
+  const discrepancies = effectiveRows.filter(r => r.type !== 'ok').length;
   const binAcc  = totalItems ? Math.round((1 - wrongBin      / totalItems) * 100) : 0;
   const invAcc  = totalItems ? Math.round((1 - discrepancies / totalItems) * 100) : 0;
   _tvSetVal('tv-bins',    totalBins);
