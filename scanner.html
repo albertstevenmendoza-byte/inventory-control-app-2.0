@@ -172,6 +172,7 @@ input,select,textarea{font-family:inherit}
       <button class="hdr-btn" id="refresh-btn" onclick="refreshAll()">↻</button>
       <div class="sync-dot" id="sync-dot"></div>
       <button class="hdr-btn" onclick="NovusSettings.openModal()">⚙</button>
+      <button class="hdr-btn" onclick="clearLocalCache()" style="color:var(--red)">🗑 Clear</button>
       <button class="hdr-btn" onclick="promptName()">👤 <span id="name-display">Set Name</span></button>
     </div>
   </div>
@@ -374,6 +375,49 @@ async function refreshAll() {
   btn.textContent = '…'; btn.style.opacity = '.5'; btn.style.pointerEvents = 'none';
   await pullCloud();
   btn.textContent = '↻'; btn.style.opacity = ''; btn.style.pointerEvents = '';
+}
+
+/**
+ * clearLocalCache — wipes all scanner-side localStorage:
+ *   novus_done    = completed bins for today
+ *   novus_queue   = offline write queue
+ *   novus_sap*    = cached SAP data
+ * Use this after "Clear Count Data" is run from the Control Center
+ * so the scanner reflects the fresh state.
+ */
+function clearLocalCache() {
+  if (!confirm('Clear all local scanner data?\n\n• Completed bins list\n• Offline queue (unsynced scans)\n• Cached SAP data\n\nThis does NOT delete anything from Supabase.')) return;
+
+  // Warn if there are queued items that haven't synced yet
+  if (offlineQueue.length > 0) {
+    if (!confirm(`⚠ You have ${offlineQueue.length} scan(s) queued offline that have NOT synced to Supabase yet.\n\nClearing will permanently lose these scans. Continue?`)) return;
+  }
+
+  // Clear all local keys
+  localStorage.removeItem('novus_done');
+  localStorage.removeItem('novus_queue');
+  localStorage.removeItem('novus_sap');
+  localStorage.removeItem('novus_sap_date');
+  localStorage.removeItem('novus_sap_version_cached');
+  localStorage.removeItem('novus_sap_version');
+
+  // Reset in-memory state
+  completedBins = new Set();
+  offlineQueue  = [];
+  sapMaster     = [];
+  sapByBin      = {};
+  huIndex.clear();
+
+  // Reset UI
+  updateDoneCount();
+  updateQueueBadge();
+  updateSyncDot();
+  document.getElementById('aisle-grid').innerHTML =
+    '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text-3)">Cache cleared — tap ↻ to reload SAP data</div>';
+  document.getElementById('stat-loaded').textContent = '—';
+  document.getElementById('stat-bins').textContent   = '—';
+
+  toast('Local cache cleared ✓', 'green');
 }
 
 /* ── INDEXES ── */
