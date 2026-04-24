@@ -6,7 +6,6 @@
 <title>Cycle Counter — Novus Ops</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-/* ── Design tokens ─────────────────────── */
 :root{
   --bg:#0f1117;--surface:#181a23;--surface-2:#1f2230;--surface-3:#2a2d3a;
   --border:#313546;--text:#eceef4;--text-2:#9ba1b5;--text-3:#6c7189;
@@ -16,368 +15,164 @@
   --amber:#fbbf24;--amber-bg:rgba(251,191,36,.1);--amber-border:rgba(251,191,36,.25);
   --purple:#a78bfa;--purple-bg:rgba(167,139,250,.1);
   --cyan:#22d3ee;--cyan-bg:rgba(34,211,238,.1);
-  --radius:14px;--radius-sm:10px;
+  --r:14px;--r-sm:10px;
 }
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100dvh}
 button{font-family:inherit;border:none;cursor:pointer;-webkit-appearance:none}
 button:active{transform:scale(.96)}
-input,textarea{font-family:inherit}
+input,select,textarea{font-family:inherit}
 .mono{font-family:'JetBrains Mono',monospace}
-
-/* ── Screen system ─────────────────────── */
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:12px;font-size:12px;font-weight:700;z-index:9998;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap}
+.toast.show{opacity:1}
+.toast.green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.toast.red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.toast.blue{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(79,140,255,.2)}
+.toast.amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
 .screen{display:none;flex-direction:column;height:100dvh;overflow:hidden}
-.screen.active{display:flex}
-
-/* ── Header ────────────────────────────── */
-.header{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:12px 16px;background:var(--surface);
-  border-bottom:1px solid var(--border);flex-shrink:0;
-}
-.header h1{font-size:15px;font-weight:800}
+.screen.active{display:flex;animation:screen-in .18s ease}
+@keyframes screen-in{from{opacity:0}to{opacity:1}}
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px}
+.header h1{font-size:15px;font-weight:800;white-space:nowrap}
 .header-sub{font-size:10px;color:var(--text-2);font-weight:600}
-.header-right{display:flex;align-items:center;gap:8px}
-.hdr-btn{
-  background:var(--surface-2);color:var(--text-2);
-  padding:8px 12px;border-radius:var(--radius-sm);font-size:10px;font-weight:700;
-  transition:opacity .15s;
-}
-.hdr-btn:hover{opacity:.75}
-
-/* ── Sync indicator ─────────────────────── */
-.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
-.sync-dot.offline{background:var(--amber)}
-.sync-dot.syncing{animation:dot-pulse 1s infinite}
-@keyframes dot-pulse{50%{opacity:.25}}
-.queue-badge{
-  background:var(--amber-bg);color:var(--amber);
-  padding:3px 8px;border-radius:6px;font-size:9px;font-weight:800;
-}
-.queue-badge[hidden]{display:none}
-
-/* ── Skeleton loader ─────────────────────── */
-.skeleton{
-  background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 50%,var(--surface-2) 75%);
-  background-size:400% 100%;border-radius:8px;animation:shimmer 1.5s infinite;
-}
-@keyframes shimmer{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
-
-/* ── Setup screen ─────────────────────── */
-.setup-content{
-  flex:1;overflow-y:auto;padding:16px;padding-bottom:90px;
-  -webkit-overflow-scrolling:touch;
-}
+.header-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.hdr-btn{background:var(--surface-2);color:var(--text-2);padding:7px 11px;border-radius:var(--r-sm);font-size:10px;font-weight:700;white-space:nowrap;transition:background .15s,color .15s}
+.hdr-btn:hover{background:var(--accent-dim);color:var(--accent)}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;transition:background .3s}
+.sync-dot.offline{background:var(--amber);animation:pulse 1.5s infinite}
+.queue-badge{background:var(--amber-bg);color:var(--amber);padding:3px 8px;border-radius:6px;font-size:9px;font-weight:800}
+@keyframes pulse{50%{opacity:.3}}
+.setup-content{flex:1;overflow-y:auto;padding:16px;padding-bottom:90px;-webkit-overflow-scrolling:touch}
 .setup-content::-webkit-scrollbar{display:none}
 .stat-row{display:flex;gap:8px;margin-bottom:16px}
-.stat-box{
-  flex:1;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:14px;text-align:center;
-}
-.stat-val{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--accent)}
+.stat-box{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;text-align:center}
+.stat-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--accent)}
 .stat-label{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-3);margin-top:4px}
-.section-title{
-  font-size:10px;font-weight:800;text-transform:uppercase;
-  letter-spacing:1.5px;color:var(--text-3);margin:18px 0 10px;
-}
+.section-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-3);margin:18px 0 10px}
 .search-row{display:flex;gap:8px;margin-bottom:24px}
-.search-input{
-  flex:1;padding:12px;border-radius:12px;
-  background:var(--surface);border:1px solid var(--border);
-  color:var(--accent);font-family:'JetBrains Mono',monospace;
-  font-weight:700;outline:none;font-size:14px;transition:border-color .15s;
-}
+.search-input{flex:1;padding:12px;border-radius:12px;background:var(--surface);border:1px solid var(--border);color:var(--accent);font-family:'JetBrains Mono',monospace;font-weight:700;outline:none;font-size:14px;transition:border-color .15s}
 .search-input:focus{border-color:var(--accent)}
-.search-btn{
-  background:var(--accent);color:#fff;
-  padding:0 18px;border-radius:12px;font-size:12px;font-weight:800;
-}
-
-/* ── Aisle grid ─────────────────────── */
+.search-btn{background:var(--accent);color:#fff;padding:0 18px;border-radius:12px;font-size:12px;font-weight:800}
 .aisle-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.aisle-btn{
-  background:var(--surface);border:1.5px solid var(--border);
-  border-radius:var(--radius);padding:20px 0;text-align:center;
-  font-size:24px;font-weight:900;color:var(--text);
-  position:relative;overflow:hidden;
-  transition:transform .15s,opacity .15s,border-color .15s;
-}
-.aisle-btn:active{transform:scale(.94)}
+.aisle-btn{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:0;text-align:center;font-size:22px;font-weight:900;color:var(--text);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:72px;transition:border-color .15s,background .15s,transform .1s}
+.aisle-btn:hover{border-color:var(--accent);background:var(--accent-dim)}
+.aisle-btn:active{transform:scale(.93)}
 .aisle-btn.done{border-color:var(--green-border);background:var(--green-bg)}
-.aisle-btn .a-count{
-  position:absolute;top:5px;right:7px;
-  font-size:8px;font-weight:700;color:var(--text-3);
-}
-
-/* ── Phase bar ─────────────────────── */
+.aisle-btn.in-progress{border-color:var(--amber-border);background:var(--amber-bg)}
+.aisle-btn .a-letter{font-size:22px;font-weight:900;line-height:1}
+.aisle-btn .a-count{font-size:8px;font-weight:700;color:var(--text-3);margin-top:2px}
+.aisle-prog{position:absolute;bottom:0;left:0;height:3px;background:var(--accent);transition:width .4s ease}
+.aisle-btn.done .aisle-prog{background:var(--green)}
+.aisle-btn.in-progress .aisle-prog{background:var(--amber)}
 .phase-bar{display:flex;gap:2px;padding:10px 16px 0;background:var(--surface)}
-.phase-step{
-  flex:1;height:4px;border-radius:2px;background:var(--surface-3);
-  transform-origin:left;transition:background .3s ease;
-}
+.phase-step{flex:1;height:4px;border-radius:2px;background:var(--surface-3);transition:background .3s}
 .phase-step.active{background:var(--accent)}
 .phase-step.done{background:var(--green)}
-.phase-labels{
-  display:flex;justify-content:space-between;
-  padding:4px 16px 10px;font-size:8px;font-weight:700;
-  text-transform:uppercase;letter-spacing:1.5px;
-  color:var(--text-3);background:var(--surface);
-  border-bottom:1px solid var(--border);
-}
+.phase-labels{display:flex;justify-content:space-between;padding:4px 16px 10px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-3);background:var(--surface);border-bottom:1px solid var(--border)}
 .phase-labels span.active{color:var(--accent)}
 .phase-labels span.done{color:var(--green)}
-
-/* ── Bin navigation ─────────────────────── */
-.bin-nav{
-  display:flex;gap:6px;padding:12px 16px;
-  background:var(--surface);border-bottom:1px solid var(--border);
-  flex-shrink:0;align-items:center;
-}
-.nav-btn{
-  width:52px;height:52px;border-radius:12px;
-  background:var(--surface-2);color:var(--text-3);
-  font-size:18px;font-weight:900;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  transition:background .15s,color .15s;
-}
+.bin-nav{display:flex;gap:6px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center}
+.nav-btn{width:50px;height:50px;border-radius:12px;background:var(--surface-2);color:var(--text-3);font-size:16px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,color .15s}
 .nav-btn:hover{background:var(--accent-dim);color:var(--accent)}
-.bin-input{
-  flex:1;padding:14px;background:var(--surface-2);
-  border:2px solid var(--border);border-radius:12px;
-  font-family:'JetBrains Mono',monospace;font-size:20px;
-  font-weight:700;color:var(--accent);text-transform:uppercase;
-  text-align:center;outline:none;transition:border-color .15s;
-}
+.bin-input{flex:1;padding:13px;background:var(--surface-2);border:2px solid var(--border);border-radius:12px;font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--accent);text-transform:uppercase;text-align:center;outline:none;transition:border-color .15s}
 .bin-input:focus{border-color:var(--accent)}
-
-/* ── Bin strip ─────────────────────── */
-.bin-strip{
-  display:flex;gap:3px;padding:8px 16px;
-  overflow-x:auto;background:var(--surface);
-  scrollbar-width:none;flex-shrink:0;
-}
+.bin-strip{display:flex;gap:3px;padding:8px 16px;overflow-x:auto;background:var(--surface);scrollbar-width:none;flex-shrink:0}
 .bin-strip::-webkit-scrollbar{display:none}
-.strip-dot{
-  min-width:26px;height:26px;border-radius:7px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:8px;font-weight:800;
-  background:var(--surface-2);color:var(--text-3);flex-shrink:0;
-  cursor:pointer;transition:transform .15s,opacity .15s;
-}
-.strip-dot:active{transform:scale(.88)}
-.strip-dot.current{min-width:38px;font-size:10px;background:var(--accent);color:#fff}
+.strip-dot{min-width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;background:var(--surface-2);color:var(--text-3);flex-shrink:0;cursor:pointer;transition:background .15s,color .15s}
+.strip-dot:hover{background:var(--accent-dim);color:var(--accent)}
+.strip-dot.current{min-width:38px;font-size:10px;background:var(--accent);color:#fff;cursor:default}
 .strip-dot.done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
-
-/* ── HU list ─────────────────────────── */
-.hu-list{
-  flex:1;overflow-y:auto;padding:12px 16px 260px;
-  -webkit-overflow-scrolling:touch;
-}
+.hu-list{flex:1;overflow-y:auto;padding:12px 16px 260px;-webkit-overflow-scrolling:touch}
 .hu-list::-webkit-scrollbar{display:none}
-
-.hu-card{
-  background:var(--surface);border:1.5px solid var(--border);
-  border-radius:var(--radius);padding:16px;margin-bottom:8px;
-  animation:card-in .2s ease both;
-}
-@keyframes card-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hu-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:8px;transition:border-color .2s,background .2s;animation:card-in .18s ease both}
 .hu-card.confirmed{border-color:var(--green-border);background:var(--green-bg)}
-.hu-card.missing{border-color:var(--red-border);background:var(--red-bg);opacity:.7}
+.hu-card.missing{border-color:var(--red-border);opacity:.7;background:var(--red-bg)}
 .hu-card.adjusted{border-color:var(--amber-border);background:var(--amber-bg)}
 .hu-card.extra{border-color:rgba(6,182,212,.25);background:var(--cyan-bg)}
-
-.hu-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.hu-id{
-  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
-  color:var(--accent);background:var(--accent-dim);padding:3px 10px;border-radius:6px;
-}
-.hu-badge{
-  font-size:8px;font-weight:800;text-transform:uppercase;
-  padding:3px 10px;border-radius:6px;letter-spacing:.5px;
-}
+@keyframes card-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hu-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;flex-wrap:wrap}
+.hu-id{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-dim);padding:3px 10px;border-radius:6px;flex-shrink:0}
+.hu-badges{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.hu-badge{font-size:8px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:5px;letter-spacing:.5px;white-space:nowrap}
 .hu-badge.ok{background:var(--green-bg);color:var(--green)}
 .hu-badge.miss{background:var(--red-bg);color:var(--red)}
 .hu-badge.adj{background:var(--amber-bg);color:var(--amber)}
 .hu-badge.ext{background:var(--cyan-bg);color:var(--cyan)}
-
-.hu-meta{display:flex;gap:16px;margin-bottom:6px}
-.meta-label{display:block;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-3)}
+.hu-meta{display:flex;gap:16px;margin-bottom:6px;flex-wrap:wrap}
+.meta-item{display:flex;flex-direction:column}
+.meta-label{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-3)}
 .meta-val{font-size:13px;font-weight:700;margin-top:1px}
-.hu-desc{font-size:10px;color:var(--text-2);margin-bottom:10px}
-
-.qty-row{
-  display:flex;align-items:center;gap:6px;
-  background:var(--surface-2);border-radius:12px;padding:6px;margin-bottom:8px;
-}
-.qty-btn{
-  width:64px;height:64px;border-radius:12px;
-  background:var(--surface-3);font-size:28px;font-weight:900;
-  color:var(--text-3);display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;transition:background .15s,color .15s;
-}
+.hu-desc{font-size:10px;color:var(--text-2);margin-bottom:10px;line-height:1.4}
+.qty-row{display:flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:12px;padding:6px;margin-bottom:8px}
+.qty-btn{width:60px;height:60px;border-radius:12px;background:var(--surface-3);font-size:26px;font-weight:900;color:var(--text-3);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,color .15s}
 .qty-btn.plus{color:var(--accent)}
-.qty-btn:active{transform:scale(.9)}
-.qty-input{
-  flex:1;background:transparent;border:none;text-align:center;
-  font-family:'JetBrains Mono',monospace;font-size:38px;
-  font-weight:700;color:var(--accent);outline:none;min-width:0;
-}
+.qty-btn.plus:hover{background:var(--accent-dim)}
+.qty-input{flex:1;background:transparent;border:none;text-align:center;font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:700;color:var(--accent);outline:none;min-width:0}
 .qty-input::placeholder{color:var(--surface-3)}
 .sap-hint{text-align:center;font-size:9px;font-weight:700;color:var(--text-3);margin-bottom:8px}
-
 .hu-actions{display:flex;gap:6px}
-.act-btn{
-  flex:1;padding:18px 0;border-radius:12px;font-size:12px;
-  font-weight:800;text-transform:uppercase;min-height:56px;
-  display:flex;align-items:center;justify-content:center;
-}
+.act-btn{flex:1;padding:16px 0;border-radius:12px;font-size:12px;font-weight:800;text-transform:uppercase;min-height:54px;display:flex;align-items:center;justify-content:center;transition:filter .15s}
+.act-btn:hover{filter:brightness(1.1)}
 .act-btn.confirm{background:var(--green);color:#fff}
 .act-btn.miss{background:var(--surface-3);color:var(--red);border:1.5px solid var(--red-border)}
-.act-btn.miss.active{background:var(--red);color:#fff}
-
-.resolved-row{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:10px 14px;background:var(--surface-2);
-  border-radius:var(--radius-sm);margin-bottom:6px;
-}
+.act-btn.miss.active{background:var(--red);color:#fff;border-color:transparent}
+.resolved-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-sm);margin-bottom:6px}
 .resolved-label{font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-3)}
 .resolved-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700}
-.resolved-val.match{color:var(--green)}.resolved-val.mismatch{color:var(--amber)}
+.resolved-val.match{color:var(--green)}
+.resolved-val.mismatch{color:var(--amber)}
 .undo-btn{width:100%;padding:8px;background:none;color:var(--text-3);font-size:9px;font-weight:700}
-
-.card-footer-row{display:flex;gap:6px;margin-top:6px}
-.note-btn{
-  flex:1;padding:10px 14px;background:var(--surface-2);
-  border:1px solid var(--border);border-radius:var(--radius-sm);
-  font-size:10px;font-weight:700;color:var(--text-3);text-align:left;
-  transition:background .15s,border-color .15s,color .15s;
-}
+.card-actions-row{display:flex;gap:6px;margin-top:6px}
+.note-btn{flex:1;padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);font-size:10px;font-weight:700;color:var(--text-3);text-align:left;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.note-btn:hover{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
 .note-btn.has{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
-.move-btn{
-  flex:1;padding:10px 14px;background:var(--purple-bg);
-  border:1px solid rgba(167,139,250,.3);border-radius:var(--radius-sm);
-  font-size:10px;font-weight:700;color:var(--purple);text-align:left;
-}
-
-.counted-banner{
-  display:flex;align-items:center;gap:12px;padding:10px 14px;
-  border-radius:var(--radius);margin-bottom:8px;
-  background:var(--green-bg);border:1px solid var(--green-border);
-  animation:card-in .25s ease both;
-}
-.counted-banner strong{font-size:11px;color:var(--green);font-weight:800}
-.counted-banner small{font-size:9px;color:var(--text-2)}
+.move-btn{flex:1;padding:9px 12px;background:var(--purple-bg);border:1px solid rgba(167,139,250,.3);border-radius:var(--r-sm);font-size:10px;font-weight:700;color:var(--purple);cursor:pointer;transition:filter .15s}
+.move-btn:hover{filter:brightness(1.2)}
 .empty-bin{text-align:center;padding:48px 24px;color:var(--text-3)}
 .empty-bin .icon{font-size:40px;margin-bottom:10px;display:block}
-
-.extra-form{
-  background:var(--surface);border:1.5px dashed var(--border);
-  border-radius:var(--radius);padding:16px;margin-bottom:8px;
-  animation:card-in .2s ease both;
-}
-.extra-form h3{
-  font-size:10px;font-weight:800;text-transform:uppercase;
-  letter-spacing:1px;color:var(--cyan);margin-bottom:10px;
-}
-.field{
-  width:100%;padding:14px;background:var(--surface-2);
-  border:1.5px solid var(--border);border-radius:12px;
-  font-size:15px;font-weight:600;color:var(--text);outline:none;
-  margin-bottom:6px;transition:border-color .15s;
-}
+.counted-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--r);margin-bottom:8px;background:var(--green-bg);border:1px solid var(--green-border);animation:card-in .18s ease}
+.counted-banner strong{font-size:11px;color:var(--green);font-weight:800}
+.counted-banner small{font-size:9px;color:var(--text-2)}
+.bottom-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 16px calc(env(safe-area-inset-bottom,14px) + 10px);background:rgba(11,12,16,.93);backdrop-filter:blur(20px);border-top:1px solid var(--border);z-index:50}
+.bottom-row{display:flex;gap:6px;margin-bottom:8px}
+.btn-sec{flex:1;padding:13px 0;border-radius:12px;font-size:11px;font-weight:800;text-transform:uppercase;background:var(--surface-2);color:var(--text-2);border:1.5px solid var(--border);text-align:center;min-height:46px;transition:background .15s,border-color .15s,color .15s}
+.btn-sec:hover{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.btn-pri{width:100%;padding:17px 0;border-radius:var(--r);font-size:14px;font-weight:800;text-transform:uppercase;background:var(--green);color:#fff;min-height:58px;display:flex;align-items:center;justify-content:center;transition:filter .15s}
+.btn-pri:hover{filter:brightness(1.1)}
+.btn-pri.disabled{background:var(--surface-3);color:var(--text-3);pointer-events:none}
+.btn-pri.loading{pointer-events:none;opacity:.75}
+.btn-pri.loading::before{content:'';display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btn-spin .6s linear infinite;margin-right:8px;vertical-align:middle;flex-shrink:0}
+@keyframes btn-spin{to{transform:rotate(360deg)}}
+.setup-nav{position:fixed;bottom:0;left:0;right:0;display:flex;gap:6px;padding:10px 16px calc(env(safe-area-inset-bottom,14px) + 10px);background:rgba(11,12,16,.93);backdrop-filter:blur(20px);border-top:1px solid var(--border)}
+.setup-nav .nav-tab{flex:1;padding:13px 0;border-radius:12px;font-size:11px;font-weight:800;text-transform:uppercase;background:var(--surface-2);color:var(--text-2);border:1.5px solid var(--border);text-align:center;min-height:46px;transition:background .15s,color .15s;text-decoration:none;display:flex;align-items:center;justify-content:center}
+.setup-nav .nav-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.extra-form{background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--r);padding:16px;margin-bottom:8px;animation:card-in .18s ease}
+.extra-form h3{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--cyan);margin-bottom:10px}
+.field{width:100%;padding:13px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-weight:600;color:var(--text);outline:none;margin-bottom:6px;transition:border-color .15s}
 .field:focus{border-color:var(--accent)}
 .field::placeholder{color:var(--text-3)}
 .field-row{display:flex;gap:6px}
-
-/* ── Bottom bar ─────────────────────── */
-.bottom-bar{
-  position:fixed;bottom:0;left:0;right:0;
-  padding:10px 16px calc(env(safe-area-inset-bottom,14px) + 10px);
-  background:rgba(11,12,16,.92);backdrop-filter:blur(20px);
-  border-top:1px solid var(--border);z-index:50;
-}
-.bottom-row{display:flex;gap:6px;margin-bottom:8px}
-.btn-sec{
-  flex:1;padding:14px 0;border-radius:12px;font-size:11px;
-  font-weight:800;text-transform:uppercase;background:var(--surface-2);
-  color:var(--text-2);border:1.5px solid var(--border);text-align:center;
-  min-height:48px;transition:background .15s,color .15s,border-color .15s;
-}
-.btn-sec:hover{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
-.btn-pri{
-  width:100%;padding:18px 0;border-radius:var(--radius);font-size:14px;
-  font-weight:800;text-transform:uppercase;background:var(--green);
-  color:#fff;min-height:60px;display:flex;align-items:center;
-  justify-content:center;transition:opacity .2s;
-}
-.btn-pri.disabled{background:var(--surface-3);color:var(--text-3);pointer-events:none}
-
-.setup-nav{
-  position:fixed;bottom:0;left:0;right:0;
-  display:flex;gap:6px;
-  padding:10px 16px calc(env(safe-area-inset-bottom,14px) + 10px);
-  background:rgba(11,12,16,.92);backdrop-filter:blur(20px);
-  border-top:1px solid var(--border);
-}
-.setup-nav .nav-tab{
-  flex:1;padding:14px 0;border-radius:12px;font-size:11px;
-  font-weight:800;text-transform:uppercase;background:var(--surface-2);
-  color:var(--text-2);border:1.5px solid var(--border);text-align:center;
-  min-height:48px;display:flex;align-items:center;justify-content:center;
-  text-decoration:none;
-}
-.setup-nav .nav-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-
-/* ── Move modal ─────────────────────── */
-.modal-overlay{
-  display:none;position:fixed;inset:0;
-  background:rgba(0,0,0,.8);backdrop-filter:blur(5px);
-  z-index:100;align-items:center;justify-content:center;padding:20px;
-}
-.modal-overlay.open{display:flex}
-.modal-box{
-  background:var(--surface);width:100%;max-width:400px;
-  padding:20px;border-radius:var(--radius);border:1px solid var(--purple);
-  transform:scale(.96) translateY(10px);opacity:0;
-  transition:transform .2s cubic-bezier(.34,1.3,.64,1),opacity .18s ease;
-}
-.modal-overlay.open .modal-box{transform:none;opacity:1}
-.modal-title{color:var(--purple);font-size:16px;font-weight:800;margin-bottom:16px}
-.field-label{
-  font-size:8px;font-weight:700;text-transform:uppercase;
-  letter-spacing:1.2px;color:var(--text-3);display:block;margin-bottom:6px;
-}
-.info-block{
-  margin:8px 0 16px;font-size:11px;color:var(--text-2);min-height:40px;
-  background:var(--surface-2);padding:8px;border-radius:8px;line-height:1.5;
-}
-.move-actions{display:flex;gap:8px;margin-top:24px}
-.move-actions .btn-cancel{
-  flex:1;padding:14px;border-radius:8px;background:var(--surface-3);
-  color:var(--text-2);font-size:11px;font-weight:800;
-}
-.move-actions .btn-submit{
-  flex:2;padding:14px;border-radius:8px;background:var(--purple);
-  color:#fff;font-size:11px;font-weight:800;
-}
+#modal-move{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(5px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+#modal-move.open{display:flex}
+.move-box{background:var(--surface);width:100%;max-width:400px;padding:20px;border-radius:var(--r);border:1px solid var(--purple);animation:card-in .2s ease}
 </style>
 </head>
 <body>
+<div id="toast" class="toast"><span id="toast-text"></span></div>
 
-<!-- ═══════════════════════════════════════
-     SCREEN: SETUP — Aisle grid + product search
-════════════════════════════════════════ -->
+<!-- SCREEN 1: SETUP -->
 <div id="screen-setup" class="screen active">
   <div class="header">
     <div>
       <h1>Cycle Counter</h1>
-      <div class="header-sub" id="stat-progress">Loading…</div>
+      <div class="header-sub"><span id="stat-progress">0 / 0</span> bins today</div>
     </div>
     <div class="header-right">
-      <span class="queue-badge" id="queue-badge" hidden>0 queued</span>
-      <button class="hdr-btn" id="refresh-btn" onclick="refreshAll()">↻ Refresh</button>
+      <span class="queue-badge hidden" id="queue-badge">0 queued</span>
+      <button class="hdr-btn" id="refresh-btn" onclick="refreshAll()">↻</button>
       <div class="sync-dot" id="sync-dot"></div>
       <button class="hdr-btn" onclick="NovusSettings.openModal()">⚙</button>
+      <button class="hdr-btn" onclick="promptName()">👤 <span id="name-display">Set Name</span></button>
     </div>
   </div>
 
@@ -387,46 +182,33 @@ input,textarea{font-family:inherit}
       <div class="stat-box"><div class="stat-val" id="stat-bins">—</div><div class="stat-label">Total Bins</div></div>
       <div class="stat-box"><div class="stat-val" id="stat-done">0</div><div class="stat-label">Done Today</div></div>
     </div>
-
     <div class="section-title">Count By Product</div>
     <div class="search-row">
-      <input type="text" id="product-search" class="search-input"
-             placeholder="Enter Product #…" autocomplete="off" autocorrect="off"
-             onkeydown="if(event.key==='Enter') searchProduct()">
+      <input type="text" id="product-search" class="search-input mono" placeholder="Enter Product #…">
       <button class="search-btn" onclick="searchProduct()">Search</button>
     </div>
-
     <div class="section-title">Select Aisle</div>
     <div class="aisle-grid" id="aisle-grid">
-      <!-- Skeleton placeholders while SAP data loads from Supabase -->
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
-      <div class="skeleton" style="height:72px;border-radius:14px"></div>
+      <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text-3)">Loading SAP data…</div>
     </div>
   </div>
 
-  <nav class="setup-nav">
+  <div class="setup-nav">
     <button class="nav-tab active">Count</button>
     <a href="index.html" class="nav-tab">Home</a>
-  </nav>
+  </div>
 </div>
 
-
-<!-- ═══════════════════════════════════════
-     SCREEN: COUNTING — Bin-by-bin HU verification
-════════════════════════════════════════ -->
+<!-- SCREEN 2: COUNTING -->
 <div id="screen-counting" class="screen">
   <div class="header">
     <button class="hdr-btn" onclick="backToSetup()">← Back</button>
-    <h1 id="count-bin-title">—</h1>
-    <div class="sync-dot" id="sync-dot-count"></div>
+    <div style="flex:1;text-align:center">
+      <h1 id="count-bin-title">—</h1>
+      <div class="header-sub" id="count-aisle-label"></div>
+    </div>
+    <div class="sync-dot" id="sync-dot-2"></div>
   </div>
-
   <div class="phase-bar">
     <div class="phase-step" id="ph1"></div>
     <div class="phase-step" id="ph2"></div>
@@ -437,1074 +219,604 @@ input,textarea{font-family:inherit}
     <span id="phl2">Extras</span>
     <span id="phl3">Finalize</span>
   </div>
-
   <div class="bin-nav">
-    <button class="nav-btn" id="btn-prev-bin" onclick="stepBin(-1)">◀</button>
-    <!--
-      Input is debounced in JS (250ms) to absorb rapid barcode scanner keystrokes.
-      autocapitalize="characters" auto-uppercases bin labels on mobile.
-    -->
-    <input type="text" class="bin-input" id="bin-input"
-           placeholder="SCAN BIN…"
-           autocomplete="off" autocorrect="off" autocapitalize="characters"
-           spellcheck="false">
-    <button class="nav-btn" id="btn-next-bin" onclick="stepBin(1)">▶</button>
+    <button class="nav-btn" onclick="stepBin(-1)">◀</button>
+    <input type="text" class="bin-input" id="bin-input" placeholder="SCAN BIN…">
+    <button class="nav-btn" onclick="stepBin(1)">▶</button>
   </div>
-
   <div class="bin-strip" id="bin-strip"></div>
-
-  <!--
-    HU LIST — single delegated event listener target.
-    All card interactions use data-action / data-idx attributes.
-    Zero per-card event listeners; one repaint per render cycle.
-  -->
-  <div class="hu-list" id="hu-list" role="list"></div>
-
-  <!-- Fixed bottom action bar -->
+  <div class="hu-list" id="hu-list"></div>
   <div class="bottom-bar">
     <div class="bottom-row">
-      <button class="btn-sec" id="btn-confirm-all" onclick="confirmAll()">✓ All Expected</button>
-      <button class="btn-sec" onclick="toggleExtraForm()">+ Found Extra</button>
+      <button class="btn-sec" onclick="toggleExtra()">+ Found Extra</button>
+      <button class="btn-sec" id="btn-confirm-all" onclick="confirmAll()">✓ All</button>
     </div>
-    <button class="btn-pri disabled" id="btn-finalize" onclick="finalizeBin()">
-      Items unchecked
-    </button>
+    <button class="btn-pri" id="btn-finalize" onclick="finalizeBin()">Finalize & Next →</button>
   </div>
 </div>
 
-
-<!-- ── Move Modal ─────────────────────── -->
-<div class="modal-overlay" id="modal-move">
-  <div class="modal-box">
-    <div class="modal-title">🔄 Record Move</div>
-    <label class="field-label">HU Number</label>
-    <input type="text" class="field mono" id="qm-hu" readonly>
-    <label class="field-label">Moving To Bin</label>
-    <input type="text" class="field mono" id="qm-bin"
-           placeholder="New bin…" autocapitalize="characters" autocomplete="off">
-    <label class="field-label">Actual Qty</label>
-    <input type="number" inputmode="numeric" class="field mono" id="qm-qty" placeholder="0">
-    <div class="info-block" id="qm-info"></div>
-    <div class="move-actions">
-      <button class="btn-cancel" onclick="closeMoveModal()">Cancel</button>
-      <button class="btn-submit" onclick="submitMove()">Log Move</button>
+<!-- MOVE MODAL -->
+<div id="modal-move">
+  <div class="move-box">
+    <h3 style="color:var(--purple);font-size:16px;font-weight:800;margin-bottom:16px">🔄 Move Item</h3>
+    <label style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-3);display:block;margin-bottom:6px">HU Number</label>
+    <input type="text" id="qm-hu" class="field mono" readonly>
+    <div id="qm-info" style="margin:8px 0 16px;font-size:11px;color:var(--text-2);background:var(--surface-2);padding:8px;border-radius:8px;min-height:40px"></div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:2"><label style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-3);display:block;margin-bottom:6px">Found In Bin</label>
+      <input type="text" id="qm-bin" class="field mono" placeholder="e.g. WA12A" style="text-transform:uppercase"></div>
+      <div style="flex:1"><label style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-3);display:block;margin-bottom:6px">Actual Qty</label>
+      <input type="number" inputmode="numeric" id="qm-qty" class="field mono" placeholder="Qty"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:24px">
+      <button class="btn-sec" onclick="document.getElementById('modal-move').classList.remove('open')" style="flex:1">Cancel</button>
+      <button class="act-btn confirm" onclick="submitQuickMove()" style="flex:2">Log Movement</button>
     </div>
   </div>
 </div>
 
-
-<!-- ══════════════════════════════════════
-  SCRIPTS
-  Load order:
-    1. Supabase JS client (CDN)
-    2. novus-core.js  — initializes window.sb + shared utilities
-    3. Page script    — all scanner logic
-════════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="novus-core.js"></script>
 <script>
-/*
-  scanner.html — Page Script (Supabase Edition)
-
-  Depends on novus-core.js for:
-    window.sb            — Supabase client
-    window.SESSION_ID    — e.g. 'S-2026-04-22'
-    window.AISLE_ROWS    — aisle letter array
-    window.NovusSettings — theme + identity
-    window.toast()       — notification
-    window.debounce()    — input debounce
-    window.haptic()      — vibration
-    window.escHtml()     — XSS protection
-*/
-
 'use strict';
 
-/* ─────────────────────────────────────────
-   STATE
-───────────────────────────────────────── */
-
-let sapData      = [];      // All rows from sap_data for today's session
-let sapByBin     = {};      // sapData grouped by expected_bin
-let huIndex      = new Map();// hu → sap row (for autofill lookups)
-let binList      = [];      // Ordered unique bin array for current aisle
-let currentAisle = '';
-let currentBin   = '';
-let currentBinIdx = 0;
-let currentItems = [];      // Working copy of HU cards for current bin
-let completedBins = new Set(); // Bins submitted this session (localStorage)
-let showingExtra = false;
-let phase        = 1;
+/* ── STATE ── */
+let sapMaster   = [];   // All SAP rows for today's session
+let sapByBin    = {};   // sapMaster grouped by expected_bin
+let huIndex     = new Map();
+let aisleBins   = [];   // Ordered bins for active aisle
+let binIdx      = 0;
+let currentBin  = '';
+let currentItems= [];   // HU cards for current bin
+let completedBins = new Set();
+let offlineQueue  = [];
+let showingExtra  = false;
+let phase         = 1;
 let activeMoveIdx = -1;
-let isSubmitting  = false;   // Double-tap guard on finalize
-let isOnline      = true;
+let isSubmitting  = false;
+let isOnline      = navigator.onLine;
+let activeAisle   = null;
+let targetProduct = null;
 
-// Offline queue: array of Supabase row arrays to retry on reconnect
-let offlineQueue = [];
+/* ── BOOT ── */
+const _todayStr = new Date().toDateString();
+(function loadDone() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('novus_done') || '{}');
+    if (raw.date === _todayStr && Array.isArray(raw.bins)) completedBins = new Set(raw.bins);
+  } catch {}
+})();
+(function loadQueue() {
+  try { offlineQueue = JSON.parse(localStorage.getItem('novus_queue') || '[]'); } catch {}
+})();
 
-/* Cached DOM elements (queried once on DOMContentLoaded) */
-let huListEl, binInputEl;
+document.getElementById('name-display').textContent = NovusSettings.getUser() || 'Set Name';
+updateQueueBadge();
+updateSyncDot();
+window.addEventListener('online',  () => { isOnline = true;  updateSyncDot(); flushQueue(); });
+window.addEventListener('offline', () => { isOnline = false; updateSyncDot(); });
+setInterval(flushQueue, 15000);
+document.getElementById('bin-input').addEventListener('keydown', e => { if (e.key === 'Enter') navigateToBin(e.target.value.trim()); });
+document.getElementById('product-search').addEventListener('keydown', e => { if (e.key === 'Enter') searchProduct(); });
 
-/* ─────────────────────────────────────────
-   INITIALISATION
-───────────────────────────────────────── */
+pullCloud();
 
-document.addEventListener('DOMContentLoaded', () => {
-  huListEl  = document.getElementById('hu-list');
-  binInputEl = document.getElementById('bin-input');
-
-  // Restore local state
-  completedBins = _loadDone();
-  offlineQueue  = _loadQueue();
-
-  // Delegated events on HU list (one listener for all cards)
-  huListEl.addEventListener('click',  _onHuListClick);
-  huListEl.addEventListener('input',  _onHuListInput);
-
-  // Debounce bin input — 250ms absorbs scanner burst keystrokes
-  binInputEl.addEventListener('input', debounce(e => {
-    const v = e.target.value.trim().toUpperCase();
-    if (v.length >= 3) navigateToBin(v);
-  }, 250));
-
-  binInputEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      navigateToBin(binInputEl.value.trim().toUpperCase());
-    }
-  });
-
-  // Load SAP data from Supabase
-  _pullCloud();
-
-  // Retry offline queue every 15 seconds
-  setInterval(_flushQueue, 15000);
-
-  // Network status listeners
-  window.addEventListener('online',  () => { isOnline = true;  _updateSyncDot(); _flushQueue(); });
-  window.addEventListener('offline', () => { isOnline = false; _updateSyncDot(); });
-
-  _updateSyncDot();
-  _updateQueueBadge();
-  _updateDoneCount();
-});
-
-/* ─────────────────────────────────────────
-   DATA LAYER — Supabase reads
-───────────────────────────────────────── */
-
-/**
- * _pullCloud — fetch all sap_data rows for today's session.
- *
- * Checks localStorage cache first (expires at midnight).
- * Falls back to Supabase if missing or stale.
- * sap_data is uploaded once per session in monitor.html;
- * it rarely changes mid-count, so caching is safe.
- */
+/* ── DATA LAYER: FETCH SAP ── */
 async function pullCloud() {
   NovusLoader.start();
- 
-  const cacheKey     = 'novus_sap';
-  const cacheDateKey = 'novus_sap_date';
-  const cacheVerKey  = 'novus_sap_version_cached';
-  const today        = new Date().toDateString();
-  const cachedDate   = localStorage.getItem(cacheDateKey);
-  const cachedVer    = localStorage.getItem(cacheVerKey)          || '0';
-  const uploadVer    = localStorage.getItem('novus_sap_version')  || '0';
- 
-  if (cachedDate === today && cachedVer === uploadVer) {
+  const cacheKey  = 'novus_sap';
+  const dateKey   = 'novus_sap_date';
+  const verKey    = 'novus_sap_version_cached';
+  const today     = new Date().toDateString();
+  const cachedVer = localStorage.getItem(verKey) || '0';
+  const uploadVer = localStorage.getItem('novus_sap_version') || '0';
+
+  if (localStorage.getItem(dateKey) === today && cachedVer === uploadVer) {
     try {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.length > 0) {
-          sapMaster = parsed;
-          buildIndexes(); showSetup();
-          toast(`${sapMaster.length.toLocaleString()} items loaded (cached)`, 'blue');
-          NovusLoader.done();
-          return;
-        }
+      const parsed = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+      if (parsed.length > 0) {
+        sapMaster = parsed;
+        buildIndexes();
+        toast(`${sapMaster.length.toLocaleString()} items (cached)`, 'blue');
+        NovusLoader.done();
+        return;
       }
     } catch {}
   }
- 
+
   try {
-    // Paginated fetch — bypasses Supabase 1000-row limit
-    let allData = [], from = 0;
-    const CHUNK = 1000;
+    let all = [], from = 0;
     while (true) {
-      const { data, error } = await sb
-        .from('sap_data')
-        .select('*')
-        .eq('session_id', SESSION_ID)
-        .range(from, from + CHUNK - 1);
+      const { data, error } = await sb.from('sap_data').select('*').eq('session_id', SESSION_ID).range(from, from + 999);
       if (error) throw error;
-      allData = allData.concat(data || []);
-      if (!data || data.length < CHUNK) break;
-      from += CHUNK;
+      all = all.concat(data || []);
+      if (!data || data.length < 1000) break;
+      from += 1000;
     }
- 
-    // Map Supabase column names → sapMaster format used by 2.0 scanner
-    sapMaster = allData.map(r => ({
-      sapBin:    String(r.expected_bin       || '').trim().toUpperCase(),
-      hu:        String(r.hu                 || '').trim(),
-      product:   String(r.material           || '').trim(),
-      batch:     String(r.batch              || '').trim(),
-      desc:      String(r.description        || '').trim(),
-      sapQty:    Number(r.expected_qty)      || 0,
-      unit:      String(r.unit               || 'LB').trim(),
-      stockType: String(r.stock_type         || '').trim(),
-      sled:      String(r.sled               || '').trim(),
+    sapMaster = all.map(r => ({
+      sapBin:   String(r.expected_bin  || '').trim().toUpperCase(),
+      hu:       String(r.hu            || '').trim(),
+      product:  String(r.material      || '').trim(),
+      batch:    String(r.batch         || '').trim(),
+      desc:     String(r.description   || '').trim(),
+      sapQty:   Number(r.expected_qty) || 0,
+      unit:     String(r.unit          || 'LB').trim(),
+      sled:     String(r.sled          || '').trim(),
     }));
- 
-    // Cache for same-day use
     try {
-      localStorage.setItem(cacheKey,     JSON.stringify(sapMaster));
-      localStorage.setItem(cacheDateKey, today);
-      localStorage.setItem(cacheVerKey,  uploadVer);
+      localStorage.setItem(cacheKey,  JSON.stringify(sapMaster));
+      localStorage.setItem(dateKey,   today);
+      localStorage.setItem(verKey,    uploadVer);
     } catch {}
- 
     buildIndexes();
-    showSetup();
- 
-    if (sapMaster.length === 0) {
-      toast('No SAP data found — upload via Control Center', 'amber');
-    } else {
-      toast(`${sapMaster.length.toLocaleString()} items loaded`, 'blue');
-    }
+    if (!sapMaster.length) toast('No SAP data — upload from Control Center', 'amber');
+    else toast(`${sapMaster.length.toLocaleString()} items loaded`, 'blue');
   } catch (err) {
-    console.error('[scanner] SAP load failed:', err);
+    console.error('[scanner] fetch failed:', err);
     isOnline = false; updateSyncDot();
-    if (sapMaster.length > 0) {
-      buildIndexes(); showSetup();
-      toast('Offline — cached data', 'amber');
-    } else {
-      _showNoData();
+    if (sapMaster.length > 0) { buildIndexes(); toast('Offline — cached data', 'amber'); }
+    else {
+      document.getElementById('aisle-grid').innerHTML =
+        `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-3)">
+          <span style="font-size:36px;display:block;margin-bottom:10px">📭</span>
+          <p style="font-weight:700">No SAP data</p>
+          <p style="font-size:11px;margin-top:4px">Upload from Control Center first</p>
+        </div>`;
     }
-  } finally {
-    NovusLoader.done();
-  }
+  } finally { NovusLoader.done(); }
 }
 
-/**
- * refreshAll — user-triggered hard refresh.
- * Clears localStorage cache and re-fetches from Supabase.
- */
 async function refreshAll() {
-  // Clear all cache keys so pullCloud fetches fresh from Supabase
   localStorage.removeItem('novus_sap');
   localStorage.removeItem('novus_sap_date');
   localStorage.removeItem('novus_sap_version_cached');
- 
   const btn = document.getElementById('refresh-btn');
   btn.textContent = '…'; btn.style.opacity = '.5'; btn.style.pointerEvents = 'none';
- 
   await pullCloud();
- 
   btn.textContent = '↻'; btn.style.opacity = ''; btn.style.pointerEvents = '';
- 
-  if (completedBins.size > 0 && confirm('New SAP data loaded!\n\nClear "Already Counted" bins?')) {
-    completedBins.clear();
-    localStorage.setItem('novus_done', JSON.stringify({ date: new Date().toDateString(), bins: [] }));
-    updateDoneCount(); buildAisleGrid();
-  }
 }
 
-/**
- * _buildIndexes — pre-compute lookup maps from raw sapData.
- * Called once after any fetch. O(n) but never re-runs mid-count.
- */
-function _buildIndexes() {
-  sapByBin = {};
-  huIndex.clear();
-
-  for (const row of sapData) {
-    const bin = row.expected_bin;
-    if (!sapByBin[bin]) sapByBin[bin] = [];
-    sapByBin[bin].push(row);
-    if (row.hu) huIndex.set(row.hu, row);
-  }
-
-  // Stats
-  const totalBins  = Object.keys(sapByBin).length;
-  const totalItems = sapData.length;
-  document.getElementById('stat-loaded').textContent = totalItems || '—';
-  document.getElementById('stat-bins').textContent   = totalBins  || '—';
-  document.getElementById('stat-progress').textContent =
-    `${completedBins.size} / ${totalBins} bins counted`;
+/* ── INDEXES ── */
+function buildIndexes() {
+  sapByBin = {}; huIndex.clear();
+  sapMaster.forEach(i => {
+    i.sapBin = String(i.sapBin || '').trim().toUpperCase();
+    if (i.sapBin) { if (!sapByBin[i.sapBin]) sapByBin[i.sapBin] = []; sapByBin[i.sapBin].push(i); }
+    if (i.hu) huIndex.set(i.hu, i);
+  });
+  document.getElementById('stat-loaded').textContent = sapMaster.length.toLocaleString();
+  document.getElementById('stat-bins').textContent   = Object.keys(sapByBin).length.toLocaleString();
+  updateDoneCount();
+  buildAisleGrid();
 }
 
-/* ─────────────────────────────────────────
-   DATA LAYER — Supabase writes
-───────────────────────────────────────── */
-
-/**
- * _sbInsert — inserts an array of cycle_count rows into Supabase.
- * Throws on error so callers can handle offline queuing.
- *
- * @param {Array<object>} rows — cycle_counts schema rows
- */
-async function _sbInsert(rows) {
+/* ── DATA LAYER: INSERT ── */
+async function insertRows(rows) {
   const { error } = await sb.from('cycle_counts').insert(rows);
   if (error) throw error;
 }
 
-  
-function _payloadToRows(payload) {
-  const { user, bin, aisle, auditMode, items } = payload;
-  return (items || []).map(item => ({
-    session_id:   SESSION_ID,
-    hu:           item.hu        || 'UNKNOWN',
-    expected_bin: item.sapBin    || null,
-    scanned_bin:  bin,
-    aisle:        aisle          || (bin ? bin.charAt(1) : null),
-    expected_qty: item.sapQty    || 0,
-    scanned_qty:  item.countQty  || 0,
-    type:         item.type,
-    notes:        item.note      || null,
-    scanned_by:   user,
-    material:     item.product   || null,
-    description:  item.desc      || null,
-    batch:        item.batch     || null,
-    unit:         item.unit      || 'LB',
-    sled:         item.sled      || null,
-    sled_status:  item.sledStatus|| null,
-    audit_mode:   auditMode      || 'standard',
-  }));
-}
-  
-async function sendPayload(payload, successMsg) {
-  const rows = _payloadToRows(payload);
+async function sendRows(rows, successMsg) {
   try {
-    const { error } = await sb.from('cycle_counts').insert(rows);
-    if (error) throw error;
+    await insertRows(rows);
     isOnline = true; updateSyncDot();
     if (successMsg) toast(successMsg, 'green');
     return true;
   } catch (err) {
-    console.warn('[scanner] Insert failed, queuing:', err.message);
-    _enqueue(payload);
+    offlineQueue.push(rows);
+    try { localStorage.setItem('novus_queue', JSON.stringify(offlineQueue)); } catch {}
+    updateQueueBadge();
     isOnline = false; updateSyncDot();
-    toast('Saved offline — will sync when connected', 'amber');
-    return true; // UI still advances optimistically
+    toast('Saved offline — will sync later', 'amber');
+    return true;
   }
 }
 
-/**
- * _flushQueue — retry all queued row-batches when back online.
- * Called every 15 seconds and on 'online' event.
- */
 async function flushQueue() {
-  if (!offlineQueue.length) return;
+  if (!offlineQueue.length || !isOnline) return;
   const batch = [...offlineQueue]; offlineQueue = [];
   const failed = [];
-  for (const payload of batch) {
-    try {
-      const rows = _payloadToRows(payload);
-      const { error } = await sb.from('cycle_counts').insert(rows);
-      if (error) throw error;
-    } catch { failed.push(payload); }
+  for (const rows of batch) {
+    try { await insertRows(rows); }
+    catch { failed.push(rows); }
   }
   offlineQueue = failed;
-  localStorage.setItem('novus_queue', JSON.stringify(offlineQueue));
+  try { localStorage.setItem('novus_queue', JSON.stringify(offlineQueue)); } catch {}
   updateQueueBadge();
   if (!failed.length && batch.length) toast(`${batch.length} batch(es) synced ✓`, 'green');
 }
 
-/* ─────────────────────────────────────────
-   SETUP SCREEN
-───────────────────────────────────────── */
-
-function _buildAisleGrid() {
-  const aislesWithData = new Set(Object.keys(sapByBin).map(b => b[0]));
-  const rows = AISLE_ROWS;
-
-  let html = '';
-  for (const letter of rows) {
-    const binCount = Object.keys(sapByBin).filter(b => b.startsWith(letter)).length;
-    const isDone   = binCount > 0 && completedBins.size > 0 &&
-      Object.keys(sapByBin).filter(b => b.startsWith(letter)).every(b => completedBins.has(b));
-
-    html += `
-      <button class="aisle-btn${isDone ? ' done' : ''}"
-              onclick="selectAisle('${letter}')">
-        ${letter}
-        ${binCount ? `<span class="a-count">${binCount}</span>` : ''}
-      </button>`;
-  }
-
-  document.getElementById('aisle-grid').innerHTML = html;
+/* ── SETUP ── */
+function updateDoneCount() {
+  const totalBins = Object.keys(sapByBin).length;
+  document.getElementById('stat-done').textContent     = completedBins.size;
+  document.getElementById('stat-progress').textContent = `${completedBins.size} / ${totalBins}`;
 }
 
-function _updateDoneCount() {
-  const totalBins = Object.keys(sapByBin).length;
-  document.getElementById('stat-done').textContent = completedBins.size;
-  document.getElementById('stat-progress').textContent =
-    `${completedBins.size} / ${totalBins} bins counted`;
+function buildAisleGrid() {
+  const grid = document.getElementById('aisle-grid'); grid.innerHTML = '';
+  AISLE_ROWS.forEach(letter => {
+    const bins  = Object.keys(sapByBin).filter(b => b.charAt(1) === letter);
+    const done  = bins.filter(b => completedBins.has(b)).length;
+    const total = bins.length;
+    const pct   = total > 0 ? Math.round(done / total * 100) : 0;
+    const allDone = total > 0 && done >= total;
+    const inProg  = done > 0 && !allDone;
+    const btn = document.createElement('button');
+    btn.className = `aisle-btn${allDone ? ' done' : inProg ? ' in-progress' : ''}`;
+    btn.innerHTML = `<span class="a-letter">${letter}</span><span class="a-count">${done}/${total}</span><div class="aisle-prog" style="width:${pct}%"></div>`;
+    btn.onclick = () => selectAisle(letter);
+    grid.appendChild(btn);
+  });
+}
+
+function promptName() {
+  const name = prompt('Your name:', NovusSettings.getUser());
+  if (name !== null) { NovusSettings.set('userName', name.trim()); document.getElementById('name-display').textContent = name.trim() || 'Set Name'; }
 }
 
 function searchProduct() {
-  const query = document.getElementById('product-search').value.trim().toUpperCase();
-  if (!query) return;
-
-  const matches = sapData.filter(r =>
-    r.material?.toUpperCase().includes(query) || r.hu?.toUpperCase().includes(query)
-  );
-  if (!matches.length) { toast('No SAP matches found', 'amber'); return; }
-
-  // Jump to first match's bin
-  navigateToBin(matches[0].expected_bin);
-  toast(`Found in ${matches[0].expected_bin}`, 'blue');
+  const prod = document.getElementById('product-search').value.trim().toUpperCase();
+  if (!prod) return;
+  const bins = [...new Set(sapMaster.filter(i => i.product.toUpperCase() === prod).map(i => i.sapBin))].sort();
+  if (!bins.length) { toast(`Product ${prod} not found`, 'amber'); return; }
+  targetProduct = prod; activeAisle = null; aisleBins = bins; binIdx = 0;
+  toast(`${prod} in ${bins.length} bin(s)`, 'blue');
+  navigateToBin(aisleBins[0]);
 }
 
-/* ─────────────────────────────────────────
-   COUNTING SCREEN — Navigation
-───────────────────────────────────────── */
-
+/* ── NAVIGATION ── */
 function selectAisle(letter) {
-  currentAisle = letter;
-  binList = Object.keys(sapByBin)
-    .filter(b => b.startsWith(letter))
-    .sort();
-
-  if (!binList.length) { toast(`No SAP data for aisle ${letter}`, 'amber'); return; }
-
-  _switchScreen('counting');
-  navigateToBin(binList[0]);
+  targetProduct = null; activeAisle = letter;
+  const limit = 'BC'.includes(letter) ? 25 : 38;
+  aisleBins = [];
+  for (let n = 0; n <= limit; n++) ['A','B','C'].forEach(s => aisleBins.push(`W${letter}${String(n).padStart(2,'0')}${s}`));
+  binIdx = 0; navigateToBin(aisleBins[0]);
 }
 
 function navigateToBin(bin) {
-  // Validate bin format loosely (at least 3 chars)
-  if (!bin || bin.length < 2) return;
-
-  currentBin    = bin.toUpperCase();
-  currentBinIdx = binList.indexOf(currentBin);
-  if (currentBinIdx < 0) {
-    // Bin not in aisle list — could be a direct scan; add it
-    binList.push(currentBin);
-    binList.sort();
-    currentBinIdx = binList.indexOf(currentBin);
-  }
-
+  if (!bin) return;
+  currentBin = bin.toUpperCase();
+  binIdx = aisleBins.indexOf(currentBin); if (binIdx < 0) binIdx = 0;
+  let expected = sapByBin[currentBin] || [];
+  if (targetProduct) expected = expected.filter(i => i.product.toUpperCase() === targetProduct);
+  currentItems = expected.map(i => ({
+    hu: i.hu, product: i.product, desc: i.desc, batch: i.batch,
+    sapBin: i.sapBin, sapQty: i.sapQty, unit: i.unit, sled: i.sled,
+    scannedQty: 0, status: 'pending', isExtra: false, note: '',
+  }));
+  phase = 1; showingExtra = false;
+  switchScreen('counting');
   document.getElementById('count-bin-title').textContent = currentBin;
   document.getElementById('bin-input').value = currentBin;
-
-  // Build working HU list from SAP index
-  const sapItems = sapByBin[currentBin] || [];
-  currentItems = sapItems.map(r => ({
-    hu:         r.hu,
-    material:   r.material || '—',
-    desc:       r.description || '',
-    sapBin:     r.expected_bin,
-    sapQty:     r.expected_qty,
-    scannedQty: 0,
-    status:     'pending',
-    isExtra:    false,
-    note:       '',
-  }));
-
-  phase        = 1;
-  showingExtra = false;
-
-  _renderPhase();
-  _renderStrip();
-  renderHUList();
+  document.getElementById('count-aisle-label').textContent = activeAisle ? `Aisle ${currentBin.charAt(1)}` : '';
+  renderPhase(); renderStrip(); renderHUList(); updateFinalizeBtn();
 }
 
-function stepBin(dir) {
-  const next = currentBinIdx + dir;
-  if (next < 0 || next >= binList.length) return;
-  navigateToBin(binList[next]);
-}
+function stepBin(dir) { const n = binIdx + dir; if (n >= 0 && n < aisleBins.length) { binIdx = n; navigateToBin(aisleBins[n]); } }
+function backToSetup() { targetProduct = null; activeAisle = null; document.getElementById('product-search').value = ''; switchScreen('setup'); buildAisleGrid(); }
 
-function backToSetup() {
-  _switchScreen('setup');
-  _updateDoneCount();
-  _buildAisleGrid();
-}
-
-/* ─────────────────────────────────────────
-   PHASE BAR
-───────────────────────────────────────── */
-
-function _renderPhase() {
-  const steps  = [document.getElementById('ph1'), document.getElementById('ph2'), document.getElementById('ph3')];
-  const labels = [document.getElementById('phl1'), document.getElementById('phl2'), document.getElementById('phl3')];
-
-  steps.forEach((s, i) => {
-    s.className = 'phase-step' + (i + 1 < phase ? ' done' : i + 1 === phase ? ' active' : '');
+/* ── RENDER HELPERS ── */
+function renderPhase() {
+  ['ph1','ph2','ph3'].forEach((id,i) => {
+    document.getElementById(id).className = 'phase-step' + (phase === i+1 ? ' active' : '') + (phase > i+1 ? ' done' : '');
   });
-  labels.forEach((l, i) => {
-    l.className = i + 1 < phase ? 'done' : i + 1 === phase ? 'active' : '';
+  ['phl1','phl2','phl3'].forEach((id,i) => {
+    document.getElementById(id).className = (phase === i+1 ? 'active' : '') + (phase > i+1 ? ' done' : '');
   });
 }
 
-/* ─────────────────────────────────────────
-   BIN STRIP
-───────────────────────────────────────── */
-
-function _renderStrip() {
-  let html = '';
-  const start = Math.max(0, currentBinIdx - 5);
-  const end   = Math.min(binList.length - 1, currentBinIdx + 8);
-
-  for (let i = start; i <= end; i++) {
-    const b   = binList[i];
-    const cls = b === currentBin ? 'current' : completedBins.has(b) ? 'done' : '';
-    html += `<div class="strip-dot ${cls}" onclick="navigateToBin('${b}')">${b}</div>`;
-  }
-
-  document.getElementById('bin-strip').innerHTML = html;
-
-  // Scroll active dot into view
-  requestAnimationFrame(() => {
-    const current = document.querySelector('.strip-dot.current');
-    if (current) current.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+function renderStrip() {
+  const strip = document.getElementById('bin-strip'); strip.innerHTML = '';
+  const seen = {};
+  aisleBins.forEach(b => {
+    const num = b.substring(2,4); if (seen[num]) return; seen[num] = true;
+    const isCur  = currentBin.substring(2,4) === num;
+    const isDone = aisleBins.filter(x => x.substring(2,4) === num).some(x => completedBins.has(x));
+    const dot = document.createElement('button');
+    dot.className = `strip-dot${isCur ? ' current' : isDone && !isCur ? ' done' : ''}`;
+    dot.textContent = isCur ? num : (isDone ? '✓' : num);
+    dot.onclick = () => navigateToBin(`W${currentBin.charAt(1)}${num}A`);
+    strip.appendChild(dot);
   });
+  setTimeout(() => { const c = strip.querySelector('.current'); if (c) c.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }, 50);
 }
-
-/* ─────────────────────────────────────────
-   HU LIST RENDER
-   Builds one HTML string → single innerHTML assignment.
-   This triggers exactly one style recalculation + one repaint.
-───────────────────────────────────────── */
 
 function renderHUList() {
-  let html = '';
+  const list = document.getElementById('hu-list');
+  const parts = [];
 
   if (completedBins.has(currentBin)) {
-    html += `<div class="counted-banner">
-      <span>✅</span>
-      <div>
-        <strong>Already Submitted Today</strong>
-        <br><small>Counting again will add additional records</small>
-      </div>
-    </div>`;
+    parts.push(`<div class="counted-banner"><span>✅</span><div><strong>Already Counted Today</strong><br><small>Counting again replaces results</small></div></div>`);
   }
 
-  const nonExtras = currentItems.filter(i => !i.isExtra);
-  const extras    = currentItems.filter(i =>  i.isExtra);
-
-  if (!nonExtras.length && !showingExtra) {
-    html += `<div class="empty-bin">
-      <span class="icon">📭</span>
-      <p>SAP shows this bin as empty</p>
-      <p style="color:var(--accent);font-weight:700;font-size:11px;margin-top:6px">
-        Tap "+ Found Extra" if you find anything
-      </p>
-    </div>`;
-  } else {
-    nonExtras.forEach(item => {
-      html += _buildCardHTML(item, currentItems.indexOf(item));
-    });
+  if (!currentItems.length && !showingExtra) {
+    parts.push(`<div class="empty-bin"><span class="icon">📭</span><p>SAP shows this bin as empty</p><p style="color:var(--accent);font-weight:700;font-size:11px;margin-top:6px">Tap "+ Found Extra" if you find anything</p></div>`);
   }
 
-  if (extras.length) {
-    html += `<div class="section-title" style="color:var(--cyan);margin:14px 0 8px">
-      🔍 Extra Items Found
-    </div>`;
-    extras.forEach(item => {
-      html += _buildCardHTML(item, currentItems.indexOf(item));
-    });
+  currentItems.filter(i => !i.isExtra).forEach((item, idx) => parts.push(renderCard(item, currentItems.indexOf(item))));
+
+  const hasExtras = currentItems.some(i => i.isExtra);
+  if (hasExtras) {
+    parts.push(`<div class="section-title" style="color:var(--cyan)">🔍 Extra Items Found</div>`);
+    currentItems.filter(i => i.isExtra).forEach(item => parts.push(renderCard(item, currentItems.indexOf(item))));
   }
 
   if (showingExtra) {
-    html += `<div class="extra-form">
-      <h3>🔍 Found Extra Item</h3>
-      <input type="text" class="field mono" id="extra-hu"
-             placeholder="HU number (0 if no label)"
-             data-action="extra-hu-input" autocomplete="off">
-      <div id="extra-autofill" style="margin-bottom:6px"></div>
+    parts.push(`<div class="extra-form"><h3>🔍 Found Extra Item</h3>
+      <input type="text" class="field mono" id="extra-hu" placeholder="HU number (0 if none)" oninput="extraLookup()">
+      <div id="extra-autofill"></div>
       <div class="field-row">
-        <input type="text" class="field" id="extra-material"
-               placeholder="Material #" style="flex:1">
-        <input type="number" inputmode="numeric" class="field mono"
-               id="extra-qty" placeholder="Qty"
-               style="width:90px;text-align:center">
+        <input type="text" class="field" id="extra-product" placeholder="Product #" style="flex:1">
+        <input type="number" class="field mono" id="extra-qty" placeholder="Qty" style="width:80px;text-align:center">
       </div>
-      <textarea class="field" id="extra-notes" placeholder="Notes (optional)"
-                rows="2" style="resize:none"></textarea>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn-sec" style="flex:1" data-action="cancel-extra">Cancel</button>
-        <button class="act-btn confirm" style="flex:2" data-action="submit-extra">Add Item</button>
-      </div>
-    </div>`;
+        <button class="btn-sec" onclick="toggleExtra()" style="flex:1">Cancel</button>
+        <button class="act-btn confirm" onclick="addExtra()" style="flex:2">Add Item</button>
+      </div></div>`);
   }
 
-  huListEl.innerHTML = html;
-
-  // Wire up extra-hu live lookup AFTER innerHTML assignment
-  const extraHuInput = document.getElementById('extra-hu');
-  if (extraHuInput) {
-    extraHuInput.addEventListener('input', debounce(_extraHuLookup, 200));
-    extraHuInput.focus();
-  }
-
-  _updateFinalizeBtn();
+  list.innerHTML = parts.join('');
+  updateFinalizeBtn();
 }
 
-/* Build HTML string for one HU card */
-function _buildCardHTML(item, idx) {
-  const isOk      = item.status === 'confirmed';
-  const isMiss    = item.status === 'missing';
-  const isAdj     = item.status === 'adjusted';
-  const isPending = item.status === 'pending';
+function renderCard(item, idx) {
+  const isOk   = item.status === 'confirmed';
+  const isMiss = item.status === 'missing';
+  const isAdj  = item.status === 'adjusted';
+  const cardCls= isMiss ? 'missing' : isOk ? 'confirmed' : isAdj ? 'adjusted' : item.isExtra ? 'extra' : '';
+  const badge  = isOk ? '<span class="hu-badge ok">✓ Confirmed</span>' : isMiss ? '<span class="hu-badge miss">✗ Missing</span>' : isAdj ? '<span class="hu-badge adj">± Adjusted</span>' : item.isExtra ? '<span class="hu-badge ext">+ Extra</span>' : '';
+  const qtyMatch = item.scannedQty === item.sapQty;
 
-  const cardClass = isMiss ? 'missing' : isOk ? 'confirmed' : isAdj ? 'adjusted' : item.isExtra ? 'extra' : '';
-  const badgeHTML = isOk      ? `<span class="hu-badge ok">✓ Confirmed</span>`
-                  : isMiss    ? `<span class="hu-badge miss">✗ Missing</span>`
-                  : isAdj     ? `<span class="hu-badge adj">± Adjusted</span>`
-                  : item.isExtra ? `<span class="hu-badge ext">+ Extra</span>` : '';
-
-  const qtyMatch  = item.scannedQty === item.sapQty;
-  const noteLabel = item.note ? escHtml(item.note.substring(0, 30)) : 'Add Note';
-
-  let body = '';
-  if (isPending || isAdj) {
-    body = `
-      <div class="qty-row">
-        <button class="qty-btn" data-action="adj-minus" data-idx="${idx}">−</button>
-        <input type="number" inputmode="numeric" class="qty-input mono"
-               value="${item.scannedQty || ''}"
-               placeholder="${item.sapQty}"
-               data-action="qty-input" data-idx="${idx}">
-        <button class="qty-btn plus" data-action="adj-plus" data-idx="${idx}">+</button>
-      </div>
-      <div class="sap-hint">SAP expects <strong>${item.sapQty}</strong></div>
-      <div class="hu-actions">
-        <button class="act-btn confirm" data-action="confirm-hu" data-idx="${idx}">
-          Confirm ${item.sapQty}
-        </button>
-        <button class="act-btn miss${isMiss ? ' active' : ''}"
-                data-action="mark-missing" data-idx="${idx}">
-          Missing
-        </button>
-      </div>`;
+  let body;
+  if (item.status === 'pending' || isAdj) {
+    body = `<div class="qty-row">
+      <button class="qty-btn" data-action="dec" data-idx="${idx}">−</button>
+      <input class="qty-input" type="number" inputmode="numeric" data-idx="${idx}" value="${item.scannedQty||''}" placeholder="${item.sapQty}" onfocus="this.select()">
+      <button class="qty-btn plus" data-action="inc" data-idx="${idx}">+</button>
+    </div>
+    <div class="sap-hint">SAP expects <strong>${item.sapQty} ${item.unit||'LB'}</strong></div>
+    <div class="hu-actions">
+      <button class="act-btn confirm" data-action="confirm" data-idx="${idx}">Confirm ${item.sapQty}</button>
+      <button class="act-btn miss${isMiss?' active':''}" data-action="miss" data-idx="${idx}">Missing</button>
+    </div>`;
   } else {
-    body = `
-      <div class="resolved-row">
-        <span class="resolved-label">Count</span>
-        <span class="resolved-val ${qtyMatch ? 'match' : 'mismatch'}">${item.scannedQty}</span>
-      </div>
-      <button class="undo-btn" data-action="reset-hu" data-idx="${idx}">↺ Undo</button>`;
+    body = `<div class="resolved-row"><span class="resolved-label">Count</span><span class="resolved-val ${qtyMatch?'match':'mismatch'}">${item.scannedQty}</span></div>
+    <button class="undo-btn" data-action="reset" data-idx="${idx}">↺ Undo</button>`;
   }
 
-  return `<div class="hu-card ${cardClass}" role="listitem">
-    <div class="hu-top">
-      <span class="hu-id">HU ${escHtml(item.hu || '—')}</span>
-      ${badgeHTML}
-    </div>
+  return `<div class="hu-card ${cardCls}" data-card-idx="${idx}">
+    <div class="hu-top"><span class="hu-id">HU ${escHtml(item.hu||'—')}</span><div class="hu-badges">${badge}</div></div>
     <div class="hu-meta">
-      <div>
-        <span class="meta-label">Material</span>
-        <span class="meta-val">${escHtml(item.material)}</span>
-      </div>
-      <div>
-        <span class="meta-label">SAP Qty</span>
-        <span class="meta-val mono">${item.sapQty}</span>
-      </div>
+      <div class="meta-item"><span class="meta-label">Product</span><span class="meta-val">${escHtml(item.product||'—')}</span></div>
+      <div class="meta-item"><span class="meta-label">SAP Qty</span><span class="meta-val mono">${item.sapQty} ${item.unit||'LB'}</span></div>
+      ${item.batch ? `<div class="meta-item"><span class="meta-label">Batch</span><span class="meta-val mono" style="font-size:11px">${escHtml(item.batch)}</span></div>` : ''}
     </div>
     ${item.desc ? `<div class="hu-desc">${escHtml(item.desc)}</div>` : ''}
     ${body}
-    <div class="card-footer-row">
-      <button class="note-btn${item.note ? ' has' : ''}"
-              data-action="add-note" data-idx="${idx}">
-        📝 ${noteLabel}
-      </button>
-      <button class="move-btn" data-action="open-move" data-idx="${idx}">
-        🔄 Move Bin
-      </button>
+    <div class="card-actions-row">
+      <button class="note-btn${item.note?' has':''}" data-action="note" data-idx="${idx}">📝 ${item.note ? escHtml(item.note.substring(0,28))+(item.note.length>28?'…':'') : 'Add Note'}</button>
+      <button class="move-btn" data-action="move" data-idx="${idx}">🔄 Move</button>
     </div>
   </div>`;
 }
 
-/* ─────────────────────────────────────────
-   EVENT DELEGATION — HU list
-   One click handler covers all card buttons.
-   One input handler covers all qty inputs.
-───────────────────────────────────────── */
+/* ── EVENT DELEGATION ── */
+(function() {
+  const list = document.getElementById('hu-list');
 
-function _onHuListClick(e) {
-  const btn = e.target.closest('[data-action]');
-  if (!btn) return;
-  const action = btn.dataset.action;
-  const idx    = parseInt(btn.dataset.idx, 10);
+  list.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]'); if (!btn || !list.contains(btn)) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    switch (btn.dataset.action) {
+      case 'confirm': confirmHU(idx);     break;
+      case 'miss':    markMissing(idx);   break;
+      case 'inc':     adjustQty(idx, 1);  break;
+      case 'dec':     adjustQty(idx,-1);  break;
+      case 'reset':   resetHU(idx);       break;
+      case 'note':    addNote(idx);       break;
+      case 'move':    openMoveModal(idx); break;
+    }
+  });
 
-  switch (action) {
-    case 'confirm-hu':   confirmHU(idx);           break;
-    case 'mark-missing': markMissing(idx);          break;
-    case 'adj-minus':    adjustQty(idx, -1);        break;
-    case 'adj-plus':     adjustQty(idx,  1);        break;
-    case 'reset-hu':     resetHU(idx);              break;
-    case 'add-note':     addNote(idx);              break;
-    case 'open-move':    openMoveModal(idx);        break;
-    case 'cancel-extra': toggleExtraForm(false);   break;
-    case 'submit-extra': addExtra();                break;
-  }
+  list.addEventListener('input', e => {
+    if (!e.target.classList.contains('qty-input')) return;
+    const idx = parseInt(e.target.dataset.idx, 10);
+    const item = currentItems[idx]; if (!item) return;
+    item.scannedQty = parseFloat(e.target.value) || 0;
+    if (item.scannedQty > 0) item.status = item.scannedQty === item.sapQty ? 'confirmed' : 'adjusted';
+    updateFinalizeBtn();
+  });
+
+  list.addEventListener('change', e => {
+    if (!e.target.classList.contains('qty-input')) return;
+    const idx = parseInt(e.target.dataset.idx, 10);
+    patchCard(idx);
+  });
+})();
+
+function patchCard(idx) {
+  if (idx < 0 || idx >= currentItems.length) return;
+  const old = document.querySelector(`#hu-list [data-card-idx="${idx}"]`);
+  if (!old) { renderHUList(); return; }
+  const tmp = document.createElement('template');
+  tmp.innerHTML = renderCard(currentItems[idx], idx).trim();
+  old.replaceWith(tmp.content.firstElementChild);
+  updateFinalizeBtn();
 }
 
-function _onHuListInput(e) {
-  const inp = e.target;
-  if (inp.dataset.action === 'qty-input') {
-    setQtyFromInput(parseInt(inp.dataset.idx, 10), inp.value);
-  }
-  // extra-hu-input is handled separately with debounce after render
-}
-
-/* ─────────────────────────────────────────
-   CARD ACTIONS
-───────────────────────────────────────── */
-
+/* ── CARD ACTIONS ── */
 function confirmHU(idx) {
-  haptic();
+  if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate(15);
   const item = currentItems[idx]; if (!item) return;
-  item.scannedQty = item.scannedQty || item.sapQty;
-  item.status     = item.scannedQty === item.sapQty ? 'confirmed' : 'adjusted';
-  _checkPhaseAdvance();
-  renderHUList();
+  if (!item.scannedQty) item.scannedQty = item.sapQty;
+  item.status = item.scannedQty === item.sapQty ? 'confirmed' : 'adjusted';
+  checkPhaseAdvance(); patchCard(idx);
 }
 
 function markMissing(idx) {
-  haptic();
+  if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate(15);
   const item = currentItems[idx]; if (!item) return;
-  item.status     = item.status === 'missing' ? 'pending' : 'missing';
-  item.scannedQty = item.status === 'missing' ? 0 : item.sapQty;
-  _checkPhaseAdvance();
-  renderHUList();
+  if (item.status === 'missing') { item.status = 'pending'; item.scannedQty = 0; }
+  else { item.status = 'missing'; item.scannedQty = 0; }
+  checkPhaseAdvance(); patchCard(idx);
 }
 
 function adjustQty(idx, delta) {
-  haptic();
+  if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate(15);
   const item = currentItems[idx]; if (!item) return;
   item.scannedQty = Math.max(0, (item.scannedQty || 0) + delta);
-  item.status     = 'adjusted';
-  renderHUList();
-}
-
-function setQtyFromInput(idx, val) {
-  const item = currentItems[idx]; if (!item) return;
-  item.scannedQty = parseFloat(val) || 0;
-  if (item.scannedQty > 0) {
-    item.status = item.scannedQty === item.sapQty ? 'confirmed' : 'adjusted';
-  }
-  _updateFinalizeBtn(); // Cheaper than full re-render on every keystroke
+  item.status = 'adjusted';
+  patchCard(idx);
 }
 
 function resetHU(idx) {
-  haptic();
+  if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate(15);
   const item = currentItems[idx]; if (!item) return;
-  item.status     = 'pending';
-  item.scannedQty = 0;
-  phase = 1;
-  _renderPhase();
-  renderHUList();
+  item.status = 'pending'; item.scannedQty = 0;
+  phase = 1; renderPhase(); patchCard(idx);
 }
 
 function confirmAll() {
-  haptic();
+  if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate(15);
   currentItems.forEach(item => {
-    if (!item.isExtra && item.status === 'pending') {
-      item.scannedQty = item.sapQty;
-      item.status     = 'confirmed';
-    }
+    if (!item.isExtra && item.status === 'pending') { item.scannedQty = item.sapQty; item.status = 'confirmed'; }
   });
-  _checkPhaseAdvance();
-  renderHUList();
+  checkPhaseAdvance(); renderHUList();
 }
 
 function addNote(idx) {
-  const item = currentItems[idx]; if (!item) return;
-  const note = prompt('Note for this HU:', item.note || '');
-  if (note !== null) {
-    item.note = note.trim();
-    renderHUList();
+  const note = prompt('Note:', currentItems[idx].note || '');
+  if (note !== null) { currentItems[idx].note = note.trim(); patchCard(idx); }
+}
+
+function checkPhaseAdvance() {
+  const allResolved = currentItems.filter(i => !i.isExtra).every(i => i.status !== 'pending');
+  if (allResolved && phase === 1) { phase = 2; renderPhase(); }
+}
+
+/* ── EXTRAS ── */
+function toggleExtra() { showingExtra = !showingExtra; renderHUList(); }
+function extraLookup() {
+  const hu = document.getElementById('extra-hu').value.trim();
+  if (hu.length < 4) return;
+  const m = huIndex.get(hu);
+  if (m) {
+    document.getElementById('extra-product').value = m.product;
+    document.getElementById('extra-autofill').innerHTML = '<span style="font-size:9px;font-weight:700;color:var(--green);background:var(--green-bg);padding:3px 8px;border-radius:6px;display:inline-block">✓ Auto-filled from SAP</span>';
   }
 }
-
-/* ─────────────────────────────────────────
-   EXTRA ITEM FORM
-───────────────────────────────────────── */
-
-function toggleExtraForm(force) {
-  showingExtra = force !== undefined ? force : !showingExtra;
-  renderHUList();
-}
-
-function _extraHuLookup() {
-  const hu      = document.getElementById('extra-hu')?.value.trim();
-  const feedback = document.getElementById('extra-autofill');
-  if (!feedback) return;
-  if (!hu || hu.length < 6) { feedback.innerHTML = ''; return; }
-
-  const match = huIndex.get(hu);
-  if (match) {
-    const matEl = document.getElementById('extra-material');
-    if (matEl) matEl.value = match.material || '';
-    feedback.innerHTML = `<span style="font-size:9px;font-weight:700;color:var(--green);
-      background:var(--green-bg);padding:3px 8px;border-radius:6px;display:inline-block">
-      ✓ Auto-filled from SAP
-    </span>`;
-  } else {
-    feedback.innerHTML = `<span style="font-size:9px;font-weight:700;color:var(--amber);
-      background:var(--amber-bg);padding:3px 8px;border-radius:6px;display:inline-block">
-      Not in SAP — will be logged as Unexpected
-    </span>`;
-  }
-}
-
 function addExtra() {
-  const hu       = document.getElementById('extra-hu')?.value.trim()       || '0';
-  const material = document.getElementById('extra-material')?.value.trim();
-  const qty      = parseFloat(document.getElementById('extra-qty')?.value) || 0;
-  const notes    = document.getElementById('extra-notes')?.value.trim()    || '';
-
-  if (!material || !qty) { toast('Enter material # and qty', 'amber'); return; }
-
-  const match = huIndex.get(hu);
-  currentItems.push({
-    hu, material,
-    desc:       match ? match.description : 'FOUND (Extra)',
-    sapBin:     match ? match.expected_bin : '',
-    sapQty:     match ? match.expected_qty : 0,
-    scannedQty: qty,
-    status:     'confirmed',
-    isExtra:    true,
-    note:       notes,
-  });
-
-  showingExtra = false;
-  renderHUList();
-  toast('Extra item added', 'blue');
+  const hu      = document.getElementById('extra-hu').value.trim() || '0';
+  const product = document.getElementById('extra-product').value.trim();
+  const qty     = parseFloat(document.getElementById('extra-qty').value) || 0;
+  if (!product || !qty) { toast('Enter product # and qty', 'amber'); return; }
+  const m = huIndex.get(hu);
+  currentItems.push({ hu, product, desc: m ? m.desc : 'FOUND (Extra)', batch: m ? m.batch : '', sapBin: m ? m.sapBin : '', sapQty: m ? m.sapQty : 0, unit: m ? m.unit : 'LB', sled: '', scannedQty: qty, status: 'confirmed', isExtra: true, note: '' });
+  showingExtra = false; renderHUList(); toast('Extra item added', 'blue');
 }
 
-/* ─────────────────────────────────────────
-   PHASE + FINALIZE BUTTON
-───────────────────────────────────────── */
-
-function _checkPhaseAdvance() {
-  const allResolved = currentItems
-    .filter(i => !i.isExtra)
-    .every(i => i.status !== 'pending');
-  if (allResolved && phase === 1) { phase = 2; _renderPhase(); }
-}
-
-function _updateFinalizeBtn() {
-  const pending    = currentItems.filter(i => i.status === 'pending').length;
-  const btn        = document.getElementById('btn-finalize');
-  const confirmAll = document.getElementById('btn-confirm-all');
-
-  if (pending > 0) {
-    btn.className   = 'btn-pri disabled';
-    btn.textContent = `${pending} item${pending > 1 ? 's' : ''} unchecked`;
-  } else {
-    btn.className   = 'btn-pri';
-    btn.textContent = currentItems.length === 0 ? 'Skip Empty Bin →' : 'Finalize & Next Bin →';
-  }
-
-  const unresolved = currentItems.filter(i => !i.isExtra && i.status === 'pending').length;
-  if (confirmAll) confirmAll.style.display = (unresolved <= 1) ? 'none' : '';
-}
-
-/* ─────────────────────────────────────────
-   MOVE MODAL
-───────────────────────────────────────── */
-
+/* ── MOVE MODAL ── */
 function openMoveModal(idx) {
-  activeMoveIdx = idx;
-  const item = currentItems[idx];
+  activeMoveIdx = idx; const item = currentItems[idx];
   document.getElementById('qm-hu').value  = item.hu;
   document.getElementById('qm-qty').value = item.scannedQty || item.sapQty || 0;
   document.getElementById('qm-bin').value = '';
-  document.getElementById('qm-info').innerHTML =
-    `<strong style="color:var(--accent)">Moving from ${currentBin}</strong><br>
-     Material: ${escHtml(item.material)} · SAP Qty: ${item.sapQty}`;
+  document.getElementById('qm-info').innerHTML = `<strong style="color:var(--accent)">Moving from ${currentBin}</strong><br>Product: ${escHtml(item.product)} · SAP Qty: ${item.sapQty} ${item.unit}`;
   document.getElementById('modal-move').classList.add('open');
 }
 
-function closeMoveModal() {
-  document.getElementById('modal-move').classList.remove('open');
-  activeMoveIdx = -1;
-}
-
-async function submitMove() {
+async function submitQuickMove() {
   const hu     = document.getElementById('qm-hu').value.trim();
-  const newBin = document.getElementById('qm-bin').value.trim().toUpperCase();
-  const qty    = parseFloat(document.getElementById('qm-qty').value);
-
-  if (!hu || !newBin || isNaN(qty)) { toast('Fill all move fields', 'amber'); return; }
+  const scanBin= document.getElementById('qm-bin').value.trim().toUpperCase();
+  const scanQty= parseFloat(document.getElementById('qm-qty').value);
+  if (!hu || !scanBin || isNaN(scanQty)) { toast('Fill all fields', 'amber'); return; }
   if (activeMoveIdx < 0) return;
-
   const item = currentItems[activeMoveIdx];
-  const type = qty === item.sapQty ? 'move' : 'move_adj';
-
-  // Optimistic UI update
-  if (item.isExtra) {
-    currentItems.splice(activeMoveIdx, 1);
-  } else {
-    item.scannedQty = 0;
-    item.status     = 'missing';
-    item.note       = `Moved to ${newBin}`;
-  }
-  renderHUList();
-  _checkPhaseAdvance();
-  closeMoveModal();
-
-  const row = {
-    session_id:   SESSION_ID,
-    hu,
-    expected_bin: item.sapBin || null,
-    scanned_bin:  newBin,
-    expected_qty: item.sapQty,
-    scanned_qty:  qty,
-    type,
-    notes:        `Moved from ${currentBin}${item.note ? '; ' + item.note : ''}`,
-    scanned_by:   NovusSettings.getUser() || 'Counter',
-  };
-
-  await sendPayload([row], 'Movement logged ✓');
+  const type = scanQty === item.sapQty ? 'move' : 'move_adj';
+  if (item.isExtra) currentItems.splice(activeMoveIdx, 1);
+  else { item.scannedQty = 0; item.status = 'missing'; item.note = `Moved to ${scanBin}`; }
+  renderHUList(); checkPhaseAdvance();
+  document.getElementById('modal-move').classList.remove('open');
+  const rows = [{
+    session_id: SESSION_ID, hu, expected_bin: item.sapBin || null, scanned_bin: scanBin,
+    aisle: scanBin.charAt(1), expected_qty: item.sapQty, scanned_qty: scanQty,
+    type, notes: `Moved from ${currentBin}`, scanned_by: NovusSettings.getUser() || 'Counter',
+    material: item.product, description: item.desc, batch: item.batch, unit: item.unit,
+    sled: item.sled || null, sled_status: null, audit_mode: 'standard',
+  }];
+  await sendRows(rows, 'Movement logged');
 }
 
-/* ─────────────────────────────────────────
-   BIN FINALIZATION
-   Maps each HU to a Supabase row with the
-   correct type code per business logic:
-     ok         → bin match, qty match
-     adj        → bin match, qty mismatch
-     missing_temp → not found (backend finalizes to 'missing')
-     move       → extra HU with known sapBin ≠ currentBin, qty match
-     move_adj   → extra HU with known sapBin ≠ currentBin, qty mismatch
-     unexpected → extra HU with no SAP record
-───────────────────────────────────────── */
+/* ── FINALIZE ── */
+function updateFinalizeBtn() {
+  const p = currentItems.filter(i => i.status === 'pending').length;
+  const btn = document.getElementById('btn-finalize');
+  const confirmAllBtn = document.getElementById('btn-confirm-all');
+  if (p > 0) { btn.className = 'btn-pri disabled'; btn.textContent = `${p} item${p>1?'s':''} unchecked`; }
+  else { btn.className = 'btn-pri'; btn.textContent = currentItems.length === 0 ? '✓ Confirm Empty →' : 'Finalize & Next →'; }
+  if (confirmAllBtn) confirmAllBtn.style.display = currentItems.filter(i => !i.isExtra && i.status === 'pending').length <= 1 ? 'none' : '';
+}
 
 async function finalizeBin() {
-  if (isSubmitting) return;
-  if (currentItems.some(i => i.status === 'pending')) return;
-
+  if (isSubmitting || currentItems.some(i => i.status === 'pending')) return;
   isSubmitting = true;
-  haptic(30);
+  const btn = document.getElementById('btn-finalize');
+  btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Finalizing…';
 
   const user = NovusSettings.getUser() || 'Counter';
-
   const rows = currentItems.map(item => {
     let type = 'ok';
-    if (item.status === 'missing') {
-      // Phase 1: flag as missing_temp — monitor.html finalizes to 'missing'
-      // if still unresolved at session close
-      type = 'missing_temp';
-    } else if (item.isExtra) {
-      if (item.sapBin && item.sapBin !== currentBin) {
-        type = item.scannedQty === item.sapQty ? 'move' : 'move_adj';
-      } else {
-        type = 'unexpected';
-      }
-    } else if (item.scannedQty !== item.sapQty) {
-      type = 'adj';
-    }
-
+    if (item.status === 'missing') type = 'missing_temp';
+    else if (item.isExtra && item.sapBin && item.sapBin !== currentBin) type = item.scannedQty === item.sapQty ? 'move' : 'move_adj';
+    else if (item.isExtra) type = 'unexpected';
+    else if (item.scannedQty !== item.sapQty) type = 'adj';
     return {
-      session_id:   SESSION_ID,
-      hu:           item.hu || 'UNKNOWN',
-      expected_bin: item.sapBin || null,
-      scanned_bin:  currentBin,
-      expected_qty: item.sapQty || 0,
-      scanned_qty:  item.scannedQty || 0,
-      type,
-      notes:        item.note || null,
-      scanned_by:   user,
+      session_id: SESSION_ID, hu: item.hu || 'UNKNOWN',
+      expected_bin: item.sapBin || null, scanned_bin: currentBin,
+      aisle: currentBin.charAt(1), expected_qty: item.sapQty || 0,
+      scanned_qty: item.scannedQty || 0, type, notes: item.note || null,
+      scanned_by: user, material: item.product || null, description: item.desc || null,
+      batch: item.batch || null, unit: item.unit || 'LB',
+      sled: item.sled || null, sled_status: null, audit_mode: 'standard',
     };
   });
 
-  // For empty bins, insert a single sentinel row so the bin is marked done
-  if (!rows.length) {
-    rows.push({
-      session_id: SESSION_ID,
-      hu: 'EMPTY',
-      expected_bin: currentBin,
-      scanned_bin:  currentBin,
-      expected_qty: 0,
-      scanned_qty:  0,
-      type: 'ok',
-      notes: 'Empty bin — no HUs found',
-      scanned_by: user,
-    });
-  }
-
-  const success = await sendPayload(rows, 'Bin finalized ✓');
-
-  if (success) {
-    completedBins.add(currentBin);
-    _saveDone(completedBins);
-    _updateDoneCount();
-    _renderStrip();
-    stepBin(1);
-  }
-
-  isSubmitting = false;
-}
-
-/* ─────────────────────────────────────────
-   LOCAL STORAGE HELPERS
-───────────────────────────────────────── */
-
-/**
- * _loadDone — restore Set of completed bins from localStorage.
- * Key is date-stamped so it auto-resets each new day.
- */
-function _loadDone() {
-  const today = new Date().toDateString();
-  const raw   = localStorage.getItem('novus_done');
-  if (!raw) return new Set();
-  try {
-    const { date, bins } = JSON.parse(raw);
-    return date === today ? new Set(bins) : new Set();
-  } catch { return new Set(); }
-}
-
-function _saveDone(set) {
-  try {
-    localStorage.setItem('novus_done', JSON.stringify({
-      date: new Date().toDateString(),
-      bins: [...set],
-    }));
-  } catch {}
-}
-
-function _loadQueue() {
-  try {
-    const raw = localStorage.getItem('novus_queue');
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function _saveQueue() {
-  try { localStorage.setItem('novus_queue', JSON.stringify(offlineQueue)); } catch {}
-}
-
-/* ─────────────────────────────────────────
-   UI HELPERS
-───────────────────────────────────────── */
-
-function _switchScreen(name) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(`screen-${name}`).classList.add('active');
-}
-
-function _updateSyncDot() {
-  ['sync-dot', 'sync-dot-count'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.className = `sync-dot${isOnline ? '' : ' offline'}`;
+  if (!rows.length) rows.push({
+    session_id: SESSION_ID, hu: 'EMPTY', expected_bin: currentBin, scanned_bin: currentBin,
+    aisle: currentBin.charAt(1), expected_qty: 0, scanned_qty: 0, type: 'ok',
+    notes: 'Empty bin', scanned_by: user, audit_mode: 'standard',
   });
-}
 
-function _updateQueueBadge() {
-  const badge = document.getElementById('queue-badge');
-  if (!badge) return;
-  if (offlineQueue.length > 0) {
-    badge.textContent = `${offlineQueue.length} queued`;
-    badge.hidden = false;
+  const ok = await sendRows(rows, 'Bin finalized ✓');
+
+  btn.disabled = false; btn.classList.remove('loading');
+  isSubmitting = false;
+
+  if (ok) {
+    completedBins.add(currentBin);
+    try { localStorage.setItem('novus_done', JSON.stringify({ date: _todayStr, bins: [...completedBins] })); } catch {}
+    updateDoneCount(); renderStrip(); stepBin(1);
   } else {
-    badge.hidden = true;
+    updateFinalizeBtn();
   }
 }
-</script>
 
+/* ── UI UTILS ── */
+function switchScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+}
+function updateSyncDot() {
+  document.querySelectorAll('.sync-dot').forEach(d => { d.className = 'sync-dot' + (isOnline ? '' : ' offline'); });
+}
+function updateQueueBadge() {
+  const b = document.getElementById('queue-badge');
+  if (!b) return;
+  if (offlineQueue.length > 0) { b.textContent = `${offlineQueue.length} queued`; b.classList.remove('hidden'); }
+  else b.classList.add('hidden');
+}
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
 </body>
 </html>
