@@ -1727,16 +1727,18 @@ function _onConfirmInput() {
 function closeConfirm() { document.getElementById('confirm-overlay').classList.remove('open'); pendingAction = null; }
 async function _executeConfirm() {
   if (!pendingAction) return;
+  const action = pendingAction; // save before closeConfirm() nulls it
   closeConfirm();
-  if (pendingAction === 'clear-counts') {
+  if (action === 'clear-counts') {
     const { error } = await sb.from('cycle_counts').delete().eq('session_id', SESSION_ID);
     if (error) { toast('Delete failed: ' + error.message, 'red'); return; }
     toast(`${SESSION_ID} count data cleared ✓`, 'green');
     await fetchFullDashboard();
-  } else if (pendingAction === 'archive-sap') {
+  } else if (action === 'archive-sap') {
     const { error } = await sb.from('sap_data').delete().eq('session_id', SESSION_ID);
     if (error) { toast('Archive failed: ' + error.message, 'red'); return; }
     toast('SAP data archived ✓', 'green');
+    await fetchFullDashboard();
   }
 }
 
