@@ -368,23 +368,6 @@ tbody tr:hover{background:var(--surface)}
   </div>
 </div>
 
-<!-- PURGE MODAL -->
-<div class="confirm-overlay" id="purge-overlay">
-  <div class="confirm-box" style="border-color:rgba(167,139,250,.4)">
-    <h2 style="color:var(--purple)">🗑 Purge Old Data</h2>
-    <p>Permanently deletes cycle count and SAP records older than the selected date. This <strong>cannot be undone</strong>.</p>
-    <div style="margin-bottom:16px">
-      <label style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-3);display:block;margin-bottom:8px">Delete all records older than</label>
-      <input type="date" id="purge-date" class="confirm-input" style="margin-bottom:0;border-color:rgba(167,139,250,.4);font-family:'JetBrains Mono',monospace">
-    </div>
-    <div id="purge-preview" style="font-size:11px;color:var(--text-3);background:var(--surface-2);padding:10px 12px;border-radius:8px;margin-bottom:16px;min-height:36px;line-height:1.6"></div>
-    <div class="confirm-actions">
-      <button class="btn-cancel-confirm" onclick="closePurgeModal()">Cancel</button>
-      <button class="btn-destroy" id="btn-purge-destroy" style="background:var(--purple)" onclick="executePurge()">Purge Data</button>
-    </div>
-  </div>
-</div>
-
 <!-- TV OVERLAY -->
 <div class="tv-overlay" id="tv-overlay">
   <button class="tv-exit-btn" onclick="exitTVMode()">✕ Exit TV Mode</button>
@@ -475,7 +458,7 @@ tbody tr:hover{background:var(--surface)}
       <div class="rail-title">Admin</div>
       <button class="rail-btn danger" onclick="_confirmAction('clear-counts')" style="margin-bottom:6px">⚠ Clear Count Data</button>
       <button class="rail-btn danger" onclick="_confirmAction('archive-sap')" style="margin-bottom:6px">🗃 Archive SAP Data</button>
-      <button class="rail-btn danger" onclick="openPurgeModal()" style="background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,.3)">🗑 Purge Old Data</button>
+      <button class="rail-btn danger" onclick="purgeOldData()" style="background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,.3)">🗑 Purge Old Data</button>
     </div>
   </aside>
 
@@ -1766,89 +1749,30 @@ async function _executeConfirm() {
 }
 
 /* ══════════════════════════════════════════════════════
-   PURGE OLD DATA
+   PURGE OLD DATA — one-click, fixed 90-day cutoff
 ══════════════════════════════════════════════════════ */
+async function purgeOldData() {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 90);
+  const cutoff = cutoffDate.toISOString();
+  const label  = cutoffDate.toLocaleDateString();
 
-function openPurgeModal() {
-  // Default to 90 days ago
-  const d = new Date();
-  d.setDate(d.getDate() - 90);
-  document.getElementById('purge-date').value = d.toISOString().split('T')[0];
-  document.getElementById('purge-preview').textContent = 'Select a date above to preview what will be deleted.';
-  document.getElementById('btn-purge-destroy').disabled = false;
-  document.getElementById('purge-overlay').classList.add('open');
+  if (!confirm(`Delete all cycle count and SAP records older than ${label} (90 days)?
 
-  // Update preview when date changes
-  document.getElementById('purge-date').oninput = _updatePurgePreview;
-  _updatePurgePreview();
-}
+This cannot be undone.`)) return;
 
-function closePurgeModal() {
-  document.getElementById('purge-overlay').classList.remove('open');
-}
-
-async function _updatePurgePreview() {
-  const dateVal = document.getElementById('purge-date').value;
-  if (!dateVal) { document.getElementById('purge-preview').textContent = 'Pick a date to preview.'; return; }
-
-  const preview = document.getElementById('purge-preview');
-  preview.textContent = 'Counting…';
-
-  try {
-    const cutoff = new Date(dateVal).toISOString();
-
-    const [ccRes, sapRes] = await Promise.all([
-      sb.from('cycle_counts')
-        .select('*', { count: 'exact', head: true })
-        .lt('scanned_at', cutoff),
-      sb.from('sap_data')
-        .select('*', { count: 'exact', head: true })
-        .lt('uploaded_at', cutoff),
-    ]);
-
-    const ccCount  = ccRes.count  || 0;
-    const sapCount = sapRes.count || 0;
-
-    if (ccCount === 0 && sapCount === 0) {
-      preview.innerHTML = '<span style="color:var(--green)">✓ No records found before this date — nothing to purge.</span>';
-      document.getElementById('btn-purge-destroy').disabled = true;
-    } else {
-      preview.innerHTML =
-        `Will delete <strong style="color:var(--purple)">${ccCount.toLocaleString()}</strong> cycle count record${ccCount !== 1 ? 's' : ''} ` +
-        `and <strong style="color:var(--purple)">${sapCount.toLocaleString()}</strong> SAP record${sapCount !== 1 ? 's' : ''} ` +
-        `older than <strong>${new Date(dateVal).toLocaleDateString()}</strong>.`;
-      document.getElementById('btn-purge-destroy').disabled = false;
-    }
-  } catch (err) {
-    preview.textContent = 'Could not count records: ' + err.message;
-  }
-}
-
-async function executePurge() {
-  const dateVal = document.getElementById('purge-date').value;
-  if (!dateVal) return;
-  const cutoff = new Date(dateVal).toISOString();
-
-  document.getElementById('btn-purge-destroy').disabled = true;
-  document.getElementById('btn-purge-destroy').textContent = 'Purging…';
   NovusLoader.start();
-
   try {
     const [ccRes, sapRes] = await Promise.all([
-      sb.from('cycle_counts').delete().lt('scanned_at', cutoff),
+      sb.from('cycle_counts').delete().lt('scanned_at',  cutoff),
       sb.from('sap_data').delete().lt('uploaded_at', cutoff),
     ]);
-
-    if (ccRes.error) throw ccRes.error;
+    if (ccRes.error)  throw ccRes.error;
     if (sapRes.error) throw sapRes.error;
-
-    closePurgeModal();
-    toast('Old data purged successfully ✓', 'green');
+    toast('Old data purged ✓', 'green');
     fetchFullDashboard();
   } catch (err) {
     toast('Purge failed: ' + err.message, 'red');
-    document.getElementById('btn-purge-destroy').disabled = false;
-    document.getElementById('btn-purge-destroy').textContent = 'Purge Data';
   } finally {
     NovusLoader.done();
   }
