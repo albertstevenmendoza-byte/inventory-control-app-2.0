@@ -820,7 +820,8 @@ document.getElementById('file-input').addEventListener('change', async (e) => {
 
     document.getElementById('uz-label').textContent = `Uploading ${sapRows.length.toLocaleString()} rows…`;
 
-    await sb.from('sap_data').delete().eq('session_id', SESSION_ID);
+    const { error: delErr } = await sb.from('sap_data').delete().eq('session_id', SESSION_ID);
+    if (delErr) throw new Error('Failed to clear old SAP data: ' + delErr.message);
 
     const CHUNK = 200; let inserted = 0;
     for (let i = 0; i < sapRows.length; i += CHUNK) {
@@ -932,18 +933,34 @@ function updateMetrics() {
   );
   const effectiveTotal = effectiveRows.length;
 
-  // Bin Accuracy  = (1 - wrong_items  / total_items) x 100
-  // "wrong items" = HUs found in wrong bin location (move, move_adj, unexpected)
+  // Bin Accuracy = (1 - wrong_bin_items / total) x 100
+  // Wrong bin = item not found where SAP expects it:
+  //   move       = found in different bin (right qty)
+  //   move_adj   = found in different bin (wrong qty)
+  //   unexpected = found but not in SAP at all
+  //   missing / missing_temp = not found anywhere
+  // Note: adj = right bin, wrong qty → bin IS correct, does NOT hurt bin accuracy
   const wrongBin = effectiveRows.filter(r =>
-    r.type === 'move' || r.type === 'move_adj' || r.type === 'unexpected'
+    r.type === 'move' || r.type === 'move_adj' ||
+    r.type === 'unexpected' ||
+    r.type === 'missing' || r.type === 'missing_temp'
   ).length;
 
-  // Inventory Accuracy = (1 - discrepancies / total_items) x 100
-  // "discrepancies" = any HU that is not OK (adj, move, missing, unexpected, etc.)
-  const discrepancies = effectiveRows.filter(r => r.type !== 'ok').length;
+  // Inventory Accuracy = (1 - wrong_qty_items / total) x 100
+  // Wrong qty = quantity on hand does not match SAP:
+  //   adj      = right bin, wrong qty
+  //   move_adj = wrong bin, wrong qty
+  //   unexpected = not in SAP (unknown qty)
+  //   missing / missing_temp = not found (qty = 0 vs SAP expected)
+  // Note: move = wrong bin but right qty → inventory count IS correct
+  const wrongQty = effectiveRows.filter(r =>
+    r.type === 'adj' || r.type === 'move_adj' ||
+    r.type === 'unexpected' ||
+    r.type === 'missing' || r.type === 'missing_temp'
+  ).length;
 
-  const binAccNum = effectiveTotal > 0 ? (1 - wrongBin      / effectiveTotal) * 100 : null;
-  const invAccNum = effectiveTotal > 0 ? (1 - discrepancies / effectiveTotal) * 100 : null;
+  const binAccNum = effectiveTotal > 0 ? (1 - wrongBin / effectiveTotal) * 100 : null;
+  const invAccNum = effectiveTotal > 0 ? (1 - wrongQty / effectiveTotal) * 100 : null;
   const binAcc    = binAccNum !== null ? binAccNum.toFixed(1) + '%' : '—';
   const invAcc    = invAccNum !== null ? invAccNum.toFixed(1) + '%' : '—';
 
@@ -1622,10 +1639,16 @@ async function _fetchKPIsForTV() {
   );
   const totalItems    = effectiveRows.length;
   const totalBins     = new Set(effectiveRows.map(r => r.scanned_bin).filter(Boolean)).size;
-  const wrongBin      = effectiveRows.filter(r => r.type === 'move' || r.type === 'move_adj' || r.type === 'unexpected').length;
-  const discrepancies = effectiveRows.filter(r => r.type !== 'ok').length;
-  const binAcc  = totalItems ? Math.round((1 - wrongBin      / totalItems) * 100) : 0;
-  const invAcc  = totalItems ? Math.round((1 - discrepancies / totalItems) * 100) : 0;
+  const wrongBin = effectiveRows.filter(r =>
+    r.type === 'move' || r.type === 'move_adj' ||
+    r.type === 'unexpected' || r.type === 'missing' || r.type === 'missing_temp'
+  ).length;
+  const wrongQty = effectiveRows.filter(r =>
+    r.type === 'adj' || r.type === 'move_adj' ||
+    r.type === 'unexpected' || r.type === 'missing' || r.type === 'missing_temp'
+  ).length;
+  const binAcc = totalItems ? Math.round((1 - wrongBin / totalItems) * 100) : 0;
+  const invAcc = totalItems ? Math.round((1 - wrongQty / totalItems) * 100) : 0;
   _tvSetVal('tv-bins',    totalBins);
   _tvSetVal('tv-items',   totalItems);
   _tvSetVal('tv-bin-acc', `${binAcc}%`);
