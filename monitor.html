@@ -492,7 +492,7 @@ tbody tr:hover{background:var(--surface)}
         <button class="aisle-filter-clear" onclick="clearAisleFilter()">✕ Clear</button>
       </div>
       <div class="table-wrap" id="table-wrap">
-        <table><thead><tr><th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th><th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th><th>Status</th><th>SLED</th><th>Note</th></tr></thead><tbody id="skeleton-tbody"></tbody></table>
+        <table><thead><tr><th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th><th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th><th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th></tr></thead><tbody id="skeleton-tbody"></tbody></table>
       </div>
     </div>
 
@@ -1072,6 +1072,16 @@ function renderTable() {
       <td><span class="status-tag ${r.type}">${TAG_LABELS[r.type] || r.type}</span></td>
       <td>${sledCell}</td>
       <td style="font-size:10px;color:var(--text-3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(r.note || '')}">${escHtml(r.note || '')}</td>
+      <td>
+        <select onchange="applyResolution(this, '${r.hu}', '${r.scanBin}')"
+                style="background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);border-radius:6px;font-size:9px;font-weight:700;padding:4px 6px;outline:none;cursor:pointer;font-family:inherit;max-width:120px">
+          <option value="">— Select —</option>
+          <option value="moved_sap">Moved in SAP</option>
+          <option value="adjusted_sap">Adjusted in SAP</option>
+          <option value="mixed_bin">Mixed Bin</option>
+          <option value="max_volume">Max Volume</option>
+        </select>
+      </td>
     </tr>`;
   }).join('');
 
@@ -1090,7 +1100,7 @@ function renderTable() {
     <thead><tr>
       <th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th>
       <th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th>
-      <th>Status</th><th>SLED</th><th>Note</th>
+      <th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th>
     </tr></thead>
     <tbody>${rowsHTML}</tbody>
   </table>${pagerHTML}`;
@@ -1775,6 +1785,50 @@ This cannot be undone.`)) return;
     toast('Purge failed: ' + err.message, 'red');
   } finally {
     NovusLoader.done();
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   RESOLUTION DROPDOWN
+   Moved in SAP / Adjusted in SAP → update type to 'ok'
+   Mixed Bin / Max Volume         → label only, no DB change
+══════════════════════════════════════════════════════ */
+async function applyResolution(select, hu, scanBin) {
+  const value = select.value;
+  if (!value) return;
+
+  // Visual feedback immediately
+  select.style.color        = 'var(--accent)';
+  select.style.borderColor  = 'var(--accent)';
+  select.disabled           = true;
+
+  if (value === 'moved_sap' || value === 'adjusted_sap') {
+    // Update the record to 'ok' in Supabase
+    try {
+      const { error } = await sb
+        .from('cycle_counts')
+        .update({ type: 'ok' })
+        .eq('session_id', SESSION_ID)
+        .eq('hu', hu)
+        .eq('scanned_bin', scanBin);
+      if (error) throw error;
+      select.style.color       = 'var(--green)';
+      select.style.borderColor = 'var(--green)';
+      toast(`${value === 'moved_sap' ? 'Move' : 'Adjustment'} confirmed in SAP ✓`, 'green');
+      // Refresh data so metrics update
+      await pollLightweight();
+    } catch (err) {
+      toast('Update failed: ' + err.message, 'red');
+      select.style.color       = 'var(--red)';
+      select.style.borderColor = 'var(--red)';
+      select.disabled          = false;
+    }
+  } else {
+    // Mixed Bin / Max Volume — label only, no DB change
+    select.style.color       = 'var(--amber)';
+    select.style.borderColor = 'var(--amber)';
+    select.disabled          = false;
+    toast(`Marked as ${value === 'mixed_bin' ? 'Mixed Bin' : 'Max Volume'}`, 'amber');
   }
 }
 
