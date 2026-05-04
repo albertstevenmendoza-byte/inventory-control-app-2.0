@@ -562,6 +562,7 @@ const PAGE_SIZE = 50;
 let sapBinData = [];
 let pendingAction = null;
 let baseWorkbook  = null; // Linked Daily_Tasks.xlsx workbook object
+let hiddenRows    = new Set(); // HU+bin keys hidden via Mixed Bin / Max Volume
 
 /* ══════════════════════════════════════════════════════
    BOOT — runs immediately on script load
@@ -1120,6 +1121,19 @@ function renderTable() {
     </tr></thead>
     <tbody>${rowsHTML}</tbody>
   </table>${pagerHTML}`;
+
+  // Re-apply hidden rows after every render
+  if (hiddenRows.size > 0) {
+    wrap.querySelectorAll('tbody tr').forEach(tr => {
+      const cells = tr.querySelectorAll('td');
+      // HU is col index 4 (0-based), scanBin is col index 3
+      const hu      = cells[4]?.textContent?.trim();
+      const scanBin = cells[3]?.textContent?.trim();
+      if (hu && scanBin && hiddenRows.has(`${hu}||${scanBin}`)) {
+        tr.style.display = 'none';
+      }
+    });
+  }
 }
 
 function goPage(p) { currentPage = p; renderTable(); document.getElementById('table-wrap')?.scrollTo(0, 0); }
@@ -1909,11 +1923,12 @@ async function applyResolution(select, hu, scanBin) {
       select.disabled          = false;
     }
   } else {
-    // Mixed Bin / Max Volume — label only, no DB change
-    select.style.color       = 'var(--amber)';
-    select.style.borderColor = 'var(--amber)';
-    select.disabled          = false;
-    toast(`Marked as ${value === 'mixed_bin' ? 'Mixed Bin' : 'Max Volume'}`, 'amber');
+    // Mixed Bin / Max Volume — hide the row, track key so it stays hidden on re-render
+    const key = `${hu}||${scanBin}`;
+    hiddenRows.add(key);
+    const row = select.closest('tr');
+    if (row) row.style.display = 'none';
+    toast(`Row hidden (${value === 'mixed_bin' ? 'Mixed Bin' : 'Max Volume'})`, 'amber');
   }
 }
 
