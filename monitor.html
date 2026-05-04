@@ -1707,7 +1707,7 @@ async function _fetchKPIsForTV() {
   while (true) {
     const { data, error } = await sb
       .from('cycle_counts')
-      .select('scanned_bin, type')
+      .select('scanned_bin, type, hu')
       .eq('session_id', SESSION_ID)
       .neq('hu', 'EMPTY')
       .range(from, from + CHUNK - 1);
