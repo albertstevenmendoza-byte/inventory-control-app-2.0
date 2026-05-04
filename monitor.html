@@ -1066,7 +1066,8 @@ function renderTable() {
     const aisle    = r.aisle || (r.scanBin ? r.scanBin.charAt(1) : '—');
     const cntCell  = isPallet ? `${r.scanQty} <span style="font-size:8px;color:var(--fresh);font-weight:800">pal</span>` : (r.scanQty ?? '—');
     const varCell  = isPallet ? '<span style="color:var(--text-3)">—</span>' : `${variance > 0 ? '+' : ''}${variance}`;
-    return `<tr>
+    const rowKey = `${r.hu || ''}||${r.scanBin || ''}`;
+    return `<tr data-row-key="${rowKey}">
       <td style="font-size:10px;color:var(--text-3)">${timeStr}</td>
       <td style="font-size:11px;color:var(--text-2)">${escHtml(r.user || '—')}</td>
       <td class="mono" style="font-size:14px;font-weight:800;color:var(--accent)">${aisle}</td>
@@ -1122,14 +1123,10 @@ function renderTable() {
     <tbody>${rowsHTML}</tbody>
   </table>${pagerHTML}`;
 
-  // Re-apply hidden rows after every render
+  // Re-apply hidden rows after every render using the data-row-key attribute
   if (hiddenRows.size > 0) {
-    wrap.querySelectorAll('tbody tr').forEach(tr => {
-      const cells = tr.querySelectorAll('td');
-      // HU is col index 4 (0-based), scanBin is col index 3
-      const hu      = cells[4]?.textContent?.trim();
-      const scanBin = cells[3]?.textContent?.trim();
-      if (hu && scanBin && hiddenRows.has(`${hu}||${scanBin}`)) {
+    wrap.querySelectorAll('tbody tr[data-row-key]').forEach(tr => {
+      if (hiddenRows.has(tr.dataset.rowKey)) {
         tr.style.display = 'none';
       }
     });
