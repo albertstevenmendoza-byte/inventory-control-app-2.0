@@ -1356,9 +1356,41 @@ function exportAudit() {
     ];
   });
 
-  const wsData = [HEADERS, ...dataRows];
-  const ws     = XLSX.utils.aoa_to_sheet(wsData);
+  // ── Calculate accuracy metrics for the summary ──
+  const expHuRows   = dataRows.filter(r => r[17] !== 'pallet_count'); // col 17 = Type
+  const movedExport = new Set(
+    expHuRows.filter(r => r[17] === 'move' || r[17] === 'move_adj').map(r => r[7]).filter(Boolean)
+  );
+  const effExport   = expHuRows.filter(r => !(r[17] === 'missing_temp' && movedExport.has(r[7])));
+  const effTotal    = effExport.length;
+  const expWrongBin = effExport.filter(r =>
+    r[17] === 'move' || r[17] === 'move_adj' || r[17] === 'unexpected' ||
+    r[17] === 'missing' || r[17] === 'missing_temp'
+  ).length;
+  const expWrongQty = effExport.filter(r =>
+    r[17] === 'adj' || r[17] === 'move_adj' || r[17] === 'unexpected' ||
+    r[17] === 'missing' || r[17] === 'missing_temp'
+  ).length;
+  const expBinAcc = effTotal > 0 ? ((1 - expWrongBin / effTotal) * 100).toFixed(1) + '%' : 'N/A';
+  const expInvAcc = effTotal > 0 ? ((1 - expWrongQty / effTotal) * 100).toFixed(1) + '%' : 'N/A';
+  const expOk     = effExport.filter(r => r[17] === 'ok').length;
+
+  // ── Summary rows above the data ──
+  const SUMMARY = [
+    ['Novus Ops — Cycle Count Report', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Session:', SESSION_ID, '', 'Date:', dateStr, '', 'Exported by:', NovusSettings.getUser() || '—'],
+    [],
+    ['Bin Accuracy', expBinAcc, '', 'Inventory Accuracy', expInvAcc, '', 'Total HUs', effTotal, '', 'OK', expOk, '', 'Discrepancies', effTotal - expOk],
+    [],
+    HEADERS,
+    ...dataRows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(SUMMARY);
   ws['!cols']  = COLDEFS;
+
+  // Merge the title row across all columns
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
 
   const SHEET_NAME = 'Daily Count & Reconciliation Lo';
 
