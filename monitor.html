@@ -448,6 +448,11 @@ tbody tr:hover{background:var(--surface)}
     </div>
     <div class="rail-section">
       <div class="rail-title">Export</div>
+      <input type="file" id="base-workbook-input" accept=".xlsx" hidden onchange="_loadBaseWorkbook(this)">
+      <div id="base-workbook-status" style="font-size:9px;color:var(--text-3);margin-bottom:8px;line-height:1.6;min-height:14px"></div>
+      <button class="rail-btn ghost" onclick="document.getElementById('base-workbook-input').click()" style="width:100%;padding:9px;margin-bottom:6px">
+        📂 Link Daily_Tasks.xlsx
+      </button>
       <button class="rail-btn primary" onclick="exportAudit()" style="width:100%;padding:9px">📥 Export Audit (.xlsx)</button>
     </div>
     <div class="rail-section" style="border-bottom:none">
@@ -492,7 +497,7 @@ tbody tr:hover{background:var(--surface)}
         <button class="aisle-filter-clear" onclick="clearAisleFilter()">✕ Clear</button>
       </div>
       <div class="table-wrap" id="table-wrap">
-        <table><thead><tr><th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th><th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th><th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th></tr></thead><tbody id="skeleton-tbody"></tbody></table>
+        <table><thead><tr><th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th><th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th><th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th><th>SAP</th></tr></thead><tbody id="skeleton-tbody"></tbody></table>
       </div>
     </div>
 
@@ -556,6 +561,7 @@ const PAGE_SIZE = 50;
 // Holds {expected_bin} rows from sap_data — used by renderAisleView() for completion %
 let sapBinData = [];
 let pendingAction = null;
+let baseWorkbook  = null; // Linked Daily_Tasks.xlsx workbook object
 
 /* ══════════════════════════════════════════════════════
    BOOT — runs immediately on script load
@@ -1082,6 +1088,16 @@ function renderTable() {
           <option value="max_volume">Max Volume</option>
         </select>
       </td>
+      <td style="text-align:center">
+        ${r.hu ? `<button
+          onclick="copySAPFields('${r.hu}')"
+          title="Copy SAP fields to clipboard"
+          style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;color:var(--text-2);transition:background .15s,color .15s,border-color .15s"
+          onmouseover="this.style.background='var(--accent-dim)';this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
+          onmouseout="this.style.background='var(--surface-2)';this.style.color='var(--text-2)';this.style.borderColor='var(--border)'">
+          📋
+        </button>` : '—'}
+      </td>
     </tr>`;
   }).join('');
 
@@ -1100,7 +1116,7 @@ function renderTable() {
     <thead><tr>
       <th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th>
       <th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th>
-      <th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th>
+      <th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th><th>SAP</th>
     </tr></thead>
     <tbody>${rowsHTML}</tbody>
   </table>${pagerHTML}`;
@@ -1241,19 +1257,47 @@ async function clearAssignments() {
 /* ══════════════════════════════════════════════════════
    EXPORT (CSV — uses local report[] array)
 ══════════════════════════════════════════════════════ */
+/**
+ * _loadBaseWorkbook — reads the user's Daily_Tasks.xlsx into memory.
+ * Called when they click "Link Daily_Tasks.xlsx" and pick their file.
+ * The workbook object is kept in `baseWorkbook` for the session.
+ */
+function _loadBaseWorkbook(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const status = document.getElementById('base-workbook-status');
+  status.textContent = '⏳ Reading workbook…';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      baseWorkbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      status.innerHTML = `<strong style="color:var(--green)">✓ Linked:</strong> ${file.name}`;
+      toast(`Linked to ${file.name} ✓`, 'green');
+    } catch (err) {
+      status.innerHTML = `<span style="color:var(--red)">❌ ${err.message}</span>`;
+      baseWorkbook = null;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+/**
+ * exportAudit — if a workbook is linked, injects cycle count data into
+ * "Daily Count & Reconciliation Lo" and downloads the full workbook.
+ * If no workbook is linked, generates a fresh Daily_Tasks_DATE.xlsx.
+ */
 function exportAudit() {
   if (!report.length) { toast('No data to export', 'red'); return; }
 
-  const now     = new Date();
-  const year    = now.getFullYear();
-  const month   = now.getMonth() + 1;
-  const weekNum = Math.ceil(
+  const now       = new Date();
+  const year      = now.getFullYear();
+  const month     = now.getMonth() + 1;
+  const weekNum   = Math.ceil(
     ((now - new Date(now.getFullYear(), 0, 1)) / 86400000
       + new Date(now.getFullYear(), 0, 1).getDay() + 1) / 7
   );
-  const dateStr = now.toLocaleDateString('en-US', {
-    month: '2-digit', day: '2-digit', year: 'numeric',
-  });
+  const dateStr   = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 
   const RESOLUTION_MAP = {
     ok:           'Confirmed Match',
@@ -1267,13 +1311,19 @@ function exportAudit() {
     found_moved:  'Located After Move',
   };
 
-  // ── Column headers matching Daily_Tasks.xlsx exactly ──
   const HEADERS = [
     'Year', 'Month', 'Week#', 'CT#', 'Date', 'SKU Type',
     'Storage Bin', 'Handling Unit', 'Product', 'Product Short Description',
     'Quantity (Expected)', 'Batch', 'Unit', 'Stock Type',
     'Count Qty (Scanned)', 'Variance (Count Qty - Quantity)', 'Variance %',
     'Type', 'Resolution', 'Auditor', 'Note',
+  ];
+
+  const COLDEFS = [
+    {wch:6},{wch:7},{wch:7},{wch:6},{wch:12},{wch:10},
+    {wch:13},{wch:14},{wch:12},{wch:36},{wch:18},{wch:14},
+    {wch:6},{wch:11},{wch:18},{wch:30},{wch:11},
+    {wch:14},{wch:24},{wch:14},{wch:24},
   ];
 
   const dataRows = report.map((r, i) => {
@@ -1283,69 +1333,40 @@ function exportAudit() {
     const variance    = isPallet ? '' : countQty - sapQty;
     const variancePct = isPallet || sapQty === 0
       ? '' : ((countQty - sapQty) / sapQty * 100).toFixed(2) + '%';
-    const skuType     = r.auditMode === 'fresh' ? 'Fresh' : 'Standard';
-
     return [
-      year,                           //  1  Year
-      month,                          //  2  Month
-      weekNum,                        //  3  Week#
-      i + 1,                          //  4  CT#
-      dateStr,                        //  5  Date
-      skuType,                        //  6  SKU Type
-      r.scanBin    || '',             //  7  Storage Bin
-      r.hu         || '',             //  8  Handling Unit
-      r.prod       || '',             //  9  Product
-      r.desc       || '',             // 10  Product Short Description
-      isPallet ? '' : sapQty,        // 11  Quantity (Expected)
-      r.batch      || '',             // 12  Batch
-      r.unit       || 'LB',          // 13  Unit
-      r.stockType  || '',             // 14  Stock Type
-      countQty,                       // 15  Count Qty (Scanned)
-      variance,                       // 16  Variance
-      variancePct,                    // 17  Variance %
-      r.type       || '',             // 18  Type
-      RESOLUTION_MAP[r.type] || '',   // 19  Resolution
-      r.user       || '',             // 20  Auditor
-      r.note       || '',             // 21  Note
+      year, month, weekNum, i + 1, dateStr,
+      r.auditMode === 'fresh' ? 'Fresh' : 'Standard',
+      r.scanBin   || '', r.hu       || '', r.prod     || '', r.desc || '',
+      isPallet ? '' : sapQty,
+      r.batch     || '', r.unit     || 'LB', r.stockType || '',
+      countQty, variance, variancePct,
+      r.type      || '', RESOLUTION_MAP[r.type] || '',
+      r.user      || '', r.note     || '',
     ];
   });
 
-  // ── Build workbook with SheetJS matching Daily_Tasks.xlsx structure ──
-  const wb = XLSX.utils.book_new();
-
-  // Sheet: Daily Count & Reconciliation Lo
   const wsData = [HEADERS, ...dataRows];
   const ws     = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']  = COLDEFS;
 
-  // Column widths matching typical SAP export widths
-  ws['!cols'] = [
-    { wch: 6  }, // Year
-    { wch: 7  }, // Month
-    { wch: 7  }, // Week#
-    { wch: 6  }, // CT#
-    { wch: 12 }, // Date
-    { wch: 10 }, // SKU Type
-    { wch: 13 }, // Storage Bin
-    { wch: 14 }, // Handling Unit
-    { wch: 12 }, // Product
-    { wch: 36 }, // Product Short Description
-    { wch: 18 }, // Quantity (Expected)
-    { wch: 14 }, // Batch
-    { wch: 6  }, // Unit
-    { wch: 11 }, // Stock Type
-    { wch: 18 }, // Count Qty (Scanned)
-    { wch: 30 }, // Variance
-    { wch: 11 }, // Variance %
-    { wch: 14 }, // Type
-    { wch: 24 }, // Resolution
-    { wch: 14 }, // Auditor
-    { wch: 24 }, // Note
-  ];
+  const SHEET_NAME = 'Daily Count & Reconciliation Lo';
 
-  // Sheet name matches Daily_Tasks.xlsx exactly
-  XLSX.utils.book_append_sheet(wb, ws, 'Daily Count & Reconciliation Lo');
+  let wb;
+  if (baseWorkbook) {
+    // ── Inject into the linked workbook ──
+    // Replace the target sheet; all other sheets stay exactly as-is
+    wb = baseWorkbook;
+    if (wb.SheetNames.includes(SHEET_NAME)) {
+      wb.Sheets[SHEET_NAME] = ws; // overwrite in place
+    } else {
+      XLSX.utils.book_append_sheet(wb, ws, SHEET_NAME);
+    }
+  } else {
+    // ── No linked workbook — generate a fresh file ──
+    wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, SHEET_NAME);
+  }
 
-  // ── Download ──
   const filename = `Daily_Tasks_${now.toISOString().split('T')[0]}.xlsx`;
   XLSX.writeFile(wb, filename);
   toast(`Exported ${report.length.toLocaleString()} rows → ${filename}`, 'green');
@@ -1894,6 +1915,27 @@ async function applyResolution(select, hu, scanBin) {
     select.disabled          = false;
     toast(`Marked as ${value === 'mixed_bin' ? 'Mixed Bin' : 'Max Volume'}`, 'amber');
   }
+}
+
+/* ══════════════════════════════════════════════════════
+   SAP COPY
+   Copies the three SAP fields to clipboard, ready to paste.
+══════════════════════════════════════════════════════ */
+function copySAPFields(hu) {
+  const text = `HU number: ${hu}\nProTyp: Y998\nReason: 0010`;
+  navigator.clipboard.writeText(text).then(() => {
+    toast(`SAP fields copied for HU ${hu}`, 'blue');
+  }).catch(() => {
+    // Fallback for browsers that block clipboard API
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.position = 'fixed'; el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    toast(`SAP fields copied for HU ${hu}`, 'blue');
+  });
 }
 
 /* ══════════════════════════════════════════════════════
