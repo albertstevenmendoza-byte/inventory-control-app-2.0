@@ -1922,7 +1922,7 @@ async function applyResolution(select, hu, scanBin) {
    Copies the three SAP fields to clipboard, ready to paste.
 ══════════════════════════════════════════════════════ */
 function copySAPFields(hu) {
-  const text = `HU number: ${hu}\nProTyp: Y998\nReason: 0010`;
+  const text = `${hu}\nY998\n0010`;
   navigator.clipboard.writeText(text).then(() => {
     toast(`SAP fields copied for HU ${hu}`, 'blue');
   }).catch(() => {
