@@ -383,6 +383,17 @@ tbody tr:hover{background:var(--surface)}
   <div id="sap-stale-countdown" style="font-size:11px;font-weight:700;color:var(--red);margin-top:20px;font-family:'JetBrains Mono',monospace"></div>
 </div>
 
+<!-- CYCLE COUNT REPORT DETAIL MODAL -->
+<div class="modal-overlay" id="report-detail-modal">
+  <div class="modal-box" style="max-width:720px">
+    <div class="modal-header">
+      <h3 id="report-modal-title">Count Report</h3>
+      <button class="modal-close" onclick="document.getElementById('report-detail-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" id="report-modal-body" style="padding:0;gap:0;overflow-y:auto;max-height:70vh"></div>
+  </div>
+</div>
+
 <!-- TV OVERLAY -->
 <div class="tv-overlay" id="tv-overlay">
   <button class="tv-exit-btn" onclick="exitTVMode()">✕ Exit TV Mode</button>
@@ -492,10 +503,15 @@ tbody tr:hover{background:var(--surface)}
 
   <main class="main-pane">
     <!-- COUNTER REPORTS -->
-    <div id="counter-reports-bar" style="display:none;flex-shrink:0;background:var(--green-bg);border-bottom:1px solid var(--green-border);padding:8px 20px;display:none;flex-wrap:wrap;gap:8px;align-items:center">
-      <span style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--green)">✅ Reports Received</span>
-      <div id="counter-report-cards" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
-      <button onclick="_dismissReports()" style="background:none;border:none;color:var(--green);font-size:10px;font-weight:700;cursor:pointer;opacity:.7;flex-shrink:0">Dismiss</button>
+    <div id="counter-reports-bar" style="display:none;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite"></div>
+          <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--green)">Cycle Count Reports</span>
+        </div>
+        <button onclick="_dismissReports()" style="background:none;border:none;color:var(--text-3);font-size:10px;font-weight:700;cursor:pointer">✕ Dismiss</button>
+      </div>
+      <div id="counter-report-cards" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
 
     <div class="view-tabs">
@@ -2273,16 +2289,31 @@ function _renderCounterReports() {
   const cards = document.getElementById('counter-report-cards');
   if (!_receivedReports.length) { bar.style.display = 'none'; return; }
 
-  bar.style.display = 'flex';
+  bar.style.display = 'block';
   cards.innerHTML = _receivedReports.map((s, i) => {
-    const time = new Date(s.completed_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
-    const assignments = (s.assignments || []).join(', ') || '—';
-    return `<div style="background:var(--surface);border:1px solid var(--green-border);border-radius:10px;padding:8px 12px;font-size:10px;min-width:160px">
-      <div style="font-weight:800;color:var(--green);margin-bottom:3px">👤 ${escHtml(s.counter)} <span style="color:var(--text-3);font-weight:600">${time}</span></div>
-      <div style="color:var(--text-2)">📦 ${s.bins_counted} bins · 🔢 ${s.hus_audited} HUs</div>
-      <div style="color:var(--text-2)">✅ ${s.ok} OK · ⚠ ${s.discrepancies} disc${s.pallet_counts ? ' · 🧊 ' + s.pallet_counts + ' pallets' : ''}</div>
-      <div style="color:var(--text-3);margin-top:2px;font-size:9px">Assigned: ${escHtml(assignments)}</div>
-    </div>`;
+    const time        = new Date(s.completed_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+    const assignments = (s.assignments || []).join(' · ') || '—';
+    const pct         = s.hus_audited > 0 ? Math.round(s.ok / s.hus_audited * 100) : 0;
+    const pctColor    = pct >= 95 ? 'var(--green)' : pct >= 85 ? 'var(--amber)' : 'var(--red)';
+    return `
+      <div onclick="openReportDetail(${i})"
+           style="display:flex;align-items:center;gap:14px;padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;transition:border-color .15s,background .15s;animation:fade-in .2s ease"
+           onmouseover="this.style.borderColor='var(--green-border)';this.style.background='var(--green-bg)'"
+           onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface-2)'">
+        <div style="width:40px;height:40px;border-radius:10px;background:var(--green-bg);border:1px solid var(--green-border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">✅</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px">
+            <span style="font-size:13px;font-weight:800;color:var(--text)">👤 ${escHtml(s.counter)}</span>
+            <span style="font-size:10px;font-weight:600;color:var(--text-3)">${time}</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-2)">📦 ${s.bins_counted} bins &nbsp;·&nbsp; 🔢 ${s.hus_audited} HUs &nbsp;·&nbsp; ${s.assignments?.join(', ') || '—'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:${pctColor}">${pct}%</div>
+          <div style="font-size:8px;font-weight:700;text-transform:uppercase;color:var(--text-3)">accuracy</div>
+        </div>
+        <div style="font-size:10px;color:var(--teal);font-weight:700;flex-shrink:0">View →</div>
+      </div>`;
   }).join('');
 }
 
@@ -2290,6 +2321,111 @@ function _dismissReports() {
   _receivedReports = [];
   document.getElementById('counter-reports-bar').style.display = 'none';
   document.getElementById('counter-report-cards').innerHTML = '';
+}
+
+async function openReportDetail(idx) {
+  const s     = _receivedReports[idx];
+  if (!s) return;
+
+  const modal = document.getElementById('report-detail-modal');
+  const body  = document.getElementById('report-modal-body');
+  const title = document.getElementById('report-modal-title');
+
+  const time = new Date(s.completed_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+  title.innerHTML = `👤 ${escHtml(s.counter)} — ${time}`;
+  body.innerHTML  = '<div style="padding:20px;color:var(--text-3);font-size:11px">Loading count detail…</div>';
+  modal.classList.add('open');
+
+  try {
+    // Fetch this counter's cycle_count rows for today's session
+    const { data, error } = await sb
+      .from('cycle_counts')
+      .select('*')
+      .eq('session_id', SESSION_ID)
+      .eq('scanned_by', s.counter)
+      .neq('type', 'pallet_count')
+      .order('scanned_bin', { ascending: true });
+
+    if (error) throw error;
+    if (!data?.length) {
+      body.innerHTML = '<div style="padding:20px;color:var(--text-3)">No detail records found for this session.</div>';
+      return;
+    }
+
+    // Build summary stats
+    const total    = data.length;
+    const ok       = data.filter(r => r.type === 'ok').length;
+    const disc     = total - ok;
+    const totalExp = data.reduce((s, r) => s + (r.expected_qty || 0), 0);
+    const totalScan= data.reduce((s, r) => s + (r.scanned_qty  || 0), 0);
+    const variance = totalScan - totalExp;
+
+    const TYPE_STYLES = {
+      ok:           { bg:'var(--green-bg)',   color:'var(--green)',  label:'OK'           },
+      adj:          { bg:'var(--amber-bg)',   color:'var(--amber)',  label:'Adjusted'     },
+      move:         { bg:'var(--purple-bg)',  color:'var(--purple)', label:'Moved'        },
+      move_adj:     { bg:'var(--surface-3)',  color:'var(--purple)', label:'Moved+Adj'    },
+      missing_temp: { bg:'var(--red-bg)',     color:'var(--red)',    label:'Missing'      },
+      missing:      { bg:'var(--red-bg)',     color:'var(--red)',    label:'Missing'      },
+      unexpected:   { bg:'var(--cyan-bg)',    color:'var(--cyan)',   label:'Unexpected'   },
+    };
+
+    // Summary header
+    const summaryHTML = `
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface-2);display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        ${[
+          { val: total,            lbl:'HUs Audited', color:'var(--accent)' },
+          { val: ok,               lbl:'OK',          color:'var(--green)'  },
+          { val: disc,             lbl:'Discrepancies',color:'var(--red)'   },
+          { val: (variance > 0 ? '+' : '') + variance.toLocaleString(),
+                                   lbl:'Qty Variance', color: variance === 0 ? 'var(--green)' : 'var(--amber)' },
+        ].map(k => `<div style="text-align:center;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${k.color}">${k.val}</div>
+          <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-3);margin-top:4px">${k.lbl}</div>
+        </div>`).join('')}
+      </div>`;
+
+    // Detail table
+    const rowsHTML = data.map(r => {
+      const ts     = TYPE_STYLES[r.type] || { bg:'var(--surface-2)', color:'var(--text-2)', label: r.type };
+      const expQty = r.expected_qty ?? 0;
+      const scanQty= r.scanned_qty  ?? 0;
+      const vari   = scanQty - expQty;
+      const variStr= vari === 0 ? '—' : (vari > 0 ? '+' : '') + vari;
+      const variColor = vari === 0 ? 'var(--text-3)' : vari > 0 ? 'var(--amber)' : 'var(--red)';
+      const foundBin = (r.scanned_bin !== r.expected_bin && r.scanned_bin)
+        ? `<span style="color:var(--amber)">${escHtml(r.scanned_bin)}</span>`
+        : escHtml(r.scanned_bin || '—');
+      return `<tr>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-3)">${escHtml(r.expected_bin || '—')}</td>
+        <td>${foundBin}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent)">${escHtml((r.hu || '').slice(-8))}</td>
+        <td style="font-size:10px">${escHtml(r.material || '—')}</td>
+        <td style="font-size:10px;color:var(--text-2);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.description || '—')}</td>
+        <td style="font-family:'JetBrains Mono',monospace;text-align:right">${expQty}</td>
+        <td style="font-family:'JetBrains Mono',monospace;text-align:right;font-weight:700">${scanQty}</td>
+        <td style="font-family:'JetBrains Mono',monospace;text-align:right;color:${variColor};font-weight:700">${variStr}</td>
+        <td><span style="font-size:8px;font-weight:800;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:${ts.bg};color:${ts.color}">${ts.label}</span></td>
+      </tr>`;
+    }).join('');
+
+    body.innerHTML = summaryHTML + `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead style="position:sticky;top:0;z-index:2">
+            <tr>
+              ${['Expected Bin','Found In','HU','Product','Description','SAP Qty','Count','Variance','Status']
+                .map(h => `<th style="padding:10px 12px;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text-3);background:var(--surface);text-align:left;border-bottom:1px solid var(--border-2);white-space:nowrap">${h}</th>`)
+                .join('')}
+            </tr>
+          </thead>
+          <tbody>${rowsHTML}</tbody>
+        </table>
+      </div>`;
+
+  } catch (err) {
+    body.innerHTML = `<div style="padding:20px;color:var(--red)">Failed to load detail: ${escHtml(err.message)}</div>`;
+  }
 }
 
 async function fetchExistingReports() {
