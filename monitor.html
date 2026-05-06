@@ -463,6 +463,11 @@ tbody tr:hover{background:var(--surface)}
       <div class="rail-title">Aisle Assignments</div>
       <div class="aisle-grid-picker" id="aisle-picker"></div>
       <input type="text" class="rail-input" id="prod-assign" placeholder="Product # (product count)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--r-sm);cursor:pointer;transition:opacity .2s" onclick="toggleUrgent()" id="urgent-toggle">
+        <span style="font-size:14px">🚨</span>
+        <span style="font-size:10px;font-weight:800;color:var(--red);flex:1">Mark as Urgent</span>
+        <div id="urgent-indicator" style="width:18px;height:18px;border-radius:50%;border:2px solid var(--red);background:transparent;transition:background .15s;flex-shrink:0"></div>
+      </div>
       <div class="rail-actions">
         <button class="rail-btn primary" onclick="pushAssignments()">Push to Team</button>
         <button class="rail-btn ghost" onclick="clearAssignments()">Clear</button>
@@ -1294,6 +1299,17 @@ function initAislePicker() {
   });
 }
 
+let urgentFlag = false;
+
+function toggleUrgent() {
+  urgentFlag = !urgentFlag;
+  const indicator = document.getElementById('urgent-indicator');
+  const toggle    = document.getElementById('urgent-toggle');
+  indicator.style.background = urgentFlag ? 'var(--red)' : 'transparent';
+  toggle.style.opacity       = urgentFlag ? '1' : '.6';
+  toggle.style.boxShadow     = urgentFlag ? '0 0 12px rgba(239,68,68,.3)' : 'none';
+}
+
 async function pushAssignments() {
   const list = [];
   assignAisles.forEach(r => list.push({ type: 'aisle', value: `W${r}`, description: `Aisle W${r}` }));
@@ -1309,12 +1325,14 @@ async function pushAssignments() {
 
   try {
     const { error } = await sb.from('assignments').insert(
-      list.map(a => ({ ...a, assigned_by: pushedBy }))
+      list.map(a => ({ ...a, assigned_by: pushedBy, urgent: urgentFlag }))
     );
     if (error) throw error;
     const label = list.map(a => a.description).join(', ');
-    toast(`Pushed by ${pushedBy}: ${label}`, 'green');
+    toast(`${urgentFlag ? '🚨 URGENT — ' : ''}Pushed by ${pushedBy}: ${label}`, urgentFlag ? 'red' : 'green');
     fetchActiveAssignments();
+    // Reset urgent flag after push
+    urgentFlag = false; toggleUrgent(); toggleUrgent();
     assignAisles.clear();
     document.querySelectorAll('.aisle-pick').forEach(b => b.classList.remove('on'));
     if (document.getElementById('prod-assign')) document.getElementById('prod-assign').value = '';
@@ -2185,6 +2203,7 @@ async function printEndOfShift() {
     <thead>
       <tr>
         <th>Assignment</th>
+        <th>Priority</th>
         <th>Pushed By</th>
         <th>Time</th>
         <th>Claimed By</th>
@@ -2199,8 +2218,12 @@ async function printEndOfShift() {
         const claimed = a.claimed_by || '—';
         const status  = a.claimed_by ? '✅ In Progress / Complete' : '⏳ Unclaimed';
         const statusColor = a.claimed_by ? '#10b981' : '#f59e0b';
-        return `<tr>
+        const priority = a.urgent
+          ? '<span style="color:#ef4444;font-weight:900;font-size:10px">🚨 URGENT</span>'
+          : '<span style="color:#888;font-size:10px">Normal</span>';
+        return `<tr${a.urgent ? ' style="background:#fff5f5"' : ''}>
           <td style="font-weight:700">${icon} ${label}</td>
+          <td>${priority}</td>
           <td>${a.assigned_by || 'Control Center'}</td>
           <td style="font-family:monospace">${time}</td>
           <td style="font-weight:700">${claimed}</td>
@@ -2256,8 +2279,9 @@ async function fetchActiveAssignments() {
   try {
     const { data, error } = await sb
       .from('assignments')
-      .select('id, type, value, description, assigned_by, assigned_at, claimed_by')
+      .select('id, type, value, description, assigned_by, assigned_at, claimed_by, urgent')
       .in('type', ['aisle', 'product'])
+      .order('urgent', { ascending: false }) // urgent items float to top
       .order('assigned_at', { ascending: true });
     if (error) throw error;
     _renderActiveAssignments(data || []);
@@ -2289,7 +2313,7 @@ function _renderActiveAssignments(data) {
                  onmouseout="this.style.borderColor='${borderColor}';this.style.background='${bgColor}'">
       <span style="font-size:13px;flex-shrink:0">${claimed ? '✅' : icon}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(label)}</div>
+        <div style="font-size:11px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.urgent ? '<span style="color:var(--red);font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;background:var(--red-bg);padding:1px 6px;border-radius:4px;border:1px solid var(--red-border);margin-right:4px">🚨 URGENT</span>' : ''}${escHtml(label)}</div>
         <div style="font-size:9px;color:var(--text-3)">
           ${claimed
             ? `<span style="color:var(--green);font-weight:700">👤 ${escHtml(claimed)}</span> is counting`
