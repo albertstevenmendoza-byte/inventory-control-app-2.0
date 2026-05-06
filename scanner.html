@@ -188,6 +188,8 @@ input,select,textarea{font-family:inherit}
 .assignment-chip:hover{filter:brightness(1.12);transform:translateY(-2px)}
 .assignment-chip:active{transform:scale(.95)}
 .assignment-chip.claimed{background:var(--green);box-shadow:0 4px 16px rgba(52,211,153,.35)}
+.assignment-chip.urgent{background:var(--red);box-shadow:0 4px 20px rgba(239,68,68,.5);animation:urgent-pulse 1.2s infinite}
+@keyframes urgent-pulse{0%,100%{box-shadow:0 4px 20px rgba(239,68,68,.5)}50%{box-shadow:0 4px 32px rgba(239,68,68,.9)}}
 @keyframes shimmer-bar{0%{background-position:0% 0}100%{background-position:200% 0}}
 .aisle-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .aisle-btn{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:0;text-align:center;font-size:22px;font-weight:900;color:var(--text);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:72px;transition:border-color .15s,background .15s,transform .1s}
@@ -1310,6 +1312,7 @@ async function fetchAssignments() {
     const { data, error } = await sb
       .from('assignments')
       .select('*')
+      .order('urgent',      { ascending: false }) // urgent first
       .order('assigned_at', { ascending: false });
     if (error) throw error;
     // Show only unclaimed assignments OR ones claimed by this user
@@ -1339,13 +1342,18 @@ function _applyAssignments(data) {
   byLabel.textContent = `From ${pushedBy} at ${pushedAt}`;
 
   // Build chips
-  chips.innerHTML = data.map(a => {
+  // Sort urgent to top
+  const sorted = [...data].sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
+
+  chips.innerHTML = sorted.map(a => {
     const icon    = a.type === 'aisle' ? '🗺' : '🔍';
     const label   = a.description || a.value;
     const claimed = a.claimed_by && a.claimed_by === (NovusSettings.getUser() || '');
-    return `<button class="assignment-chip${claimed ? ' claimed' : ''}"
+    const urgentClass = a.urgent ? ' urgent' : '';
+    const urgentPrefix = a.urgent ? '🚨 ' : '';
+    return `<button class="assignment-chip${claimed ? ' claimed' : ''}${urgentClass}"
                     onclick="_claimAndJump('${escHtml(a.id)}','${escHtml(a.type)}','${escHtml(a.value)}','${escHtml(label)}')">
-              ${icon} ${escHtml(label)}${claimed ? ' ✓' : ''}
+              ${urgentPrefix}${icon} ${escHtml(label)}${claimed ? ' ✓' : ''}
             </button>`;
   }).join('');
 
@@ -1499,8 +1507,14 @@ async function _checkAndCompleteAssignments() {
 
       if (payload.eventType === 'INSERT') {
         fetchAssignments();
-        toast('📋 New assignment from Control Center!', 'blue');
-        if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        const hasUrgent = (payload.new?.urgent === true);
+        if (hasUrgent) {
+          toast('🚨 URGENT assignment from Control Center!', 'red');
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+        } else {
+          toast('📋 New assignment from Control Center!', 'blue');
+          if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        }
       } else {
         fetchAssignments();
       }
