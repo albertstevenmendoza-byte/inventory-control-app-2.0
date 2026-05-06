@@ -998,9 +998,15 @@ function buildAisleGrid() {
       const allDone  = sapCount > 0 && done >= sapCount;
       const inProg   = done > 0 && !allDone;
 
-      // Display label: for W/F aisles show just the letter(s), for others show name
+      // Display label
       const isAlpha  = /^[WF][A-Z]$/.test(zoneKey);
-      const tileLabel = isAlpha ? zoneKey[1] : zoneKey;
+      const ZONE_LABELS = {
+        'LABEL ROOM': 'Label\nRoom',
+        'PRODUCTION': 'Prod.',
+        'RECEIVING':  'Recv.',
+        'STAGING':    'Staging',
+      };
+      const tileLabel = isAlpha ? zoneKey[1] : (ZONE_LABELS[zoneKey] || zoneKey);
       const subLabel  = sapCount > 0
         ? `${done}/${sapCount} SAP`
         : `${zoneBins.length} bins`;
