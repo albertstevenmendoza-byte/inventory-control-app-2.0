@@ -1239,7 +1239,7 @@ function initAislePicker() {
   });
 }
 
-async async function pushAssignments() {
+async function pushAssignments() {
   const list = [];
   assignAisles.forEach(r => list.push({ type: 'aisle', value: `W${r}`, description: `Aisle W${r}` }));
   const prod = document.getElementById('prod-assign')?.value.trim();
