@@ -2214,7 +2214,7 @@ async function fetchActiveAssignments() {
   try {
     const { data, error } = await sb
       .from('assignments')
-      .select('*')
+      .select('id, type, value, description, assigned_by, assigned_at, claimed_by')
       .in('type', ['aisle', 'product'])
       .order('assigned_at', { ascending: true });
     if (error) throw error;
@@ -2238,14 +2238,21 @@ function _renderActiveAssignments(data) {
     const label = a.description || a.value;
     const time  = new Date(a.assigned_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
     const by    = a.assigned_by || 'Control Center';
+    const claimed    = a.claimed_by;
+    const borderColor = claimed ? 'var(--green-border)' : 'var(--border)';
+    const bgColor     = claimed ? 'var(--green-bg)'     : 'var(--surface-2)';
     return `<div onclick="openAssignmentSummary('${escHtml(a.type)}','${escHtml(a.value)}','${escHtml(label)}')"
-                 style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);animation:fade-in .2s ease;cursor:pointer;transition:border-color .15s,background .15s"
+                 style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:${bgColor};border:1px solid ${borderColor};border-radius:var(--r-sm);animation:fade-in .2s ease;cursor:pointer;transition:border-color .15s,background .15s"
                  onmouseover="this.style.borderColor='var(--teal)';this.style.background='var(--teal-dim)'"
-                 onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface-2)'">
-      <span style="font-size:13px;flex-shrink:0">${icon}</span>
+                 onmouseout="this.style.borderColor='${borderColor}';this.style.background='${bgColor}'">
+      <span style="font-size:13px;flex-shrink:0">${claimed ? '✅' : icon}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:11px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(label)}</div>
-        <div style="font-size:9px;color:var(--text-3)">${escHtml(by)} · ${time}</div>
+        <div style="font-size:9px;color:var(--text-3)">
+          ${claimed
+            ? `<span style="color:var(--green);font-weight:700">👤 ${escHtml(claimed)}</span> is counting`
+            : `${escHtml(by)} · ${time} · <span style="color:var(--amber)">Unclaimed</span>`}
+        </div>
       </div>
       <span style="font-size:9px;color:var(--teal);font-weight:700;flex-shrink:0">View →</span>
     </div>`;
