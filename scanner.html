@@ -1469,14 +1469,12 @@ async function _checkAndCompleteAssignments() {
       const recType = payload.new?.type || payload.old?.type;
       if (recType === 'counter_report') return; // ignore report records
 
-      // Refetch all assignments on any aisle/product change
-      fetchAssignments();
-
       if (payload.eventType === 'INSERT') {
+        fetchAssignments();
         toast('📋 New assignment from Control Center!', 'blue');
         if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate([100, 50, 100]);
-      } else if (payload.eventType === 'DELETE') {
-        // Silently remove — _checkAndCompleteAssignments already toasted
+      } else {
+        fetchAssignments();
       }
     })
     .subscribe();
