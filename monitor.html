@@ -2031,12 +2031,23 @@ async function applyResolution(select, hu, scanBin) {
 /* ══════════════════════════════════════════════════════
    END OF SHIFT REPORT
 ══════════════════════════════════════════════════════ */
-function printEndOfShift() {
+async function printEndOfShift() {
   if (!report.length) { toast('No data to print', 'red'); return; }
 
   const now     = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+
+  // ── Fetch active & completed assignments ──
+  let assignmentRows = [];
+  try {
+    const { data: asgn } = await sb
+      .from('assignments')
+      .select('type, value, description, claimed_by, assigned_by, assigned_at')
+      .in('type', ['aisle', 'product'])
+      .order('assigned_at', { ascending: true });
+    assignmentRows = asgn || [];
+  } catch {}
 
   // ── Accuracy metrics (same formula as updateMetrics) ──
   const huRows    = report.filter(r => r.type !== 'pallet_count');
@@ -2167,6 +2178,37 @@ function printEndOfShift() {
       <div><strong>Session:</strong> ${SESSION_ID}</div>
     </div>
   </div>
+
+  ${assignmentRows.length ? `
+  <div class="section-title">Requested Cycle Counts</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Assignment</th>
+        <th>Pushed By</th>
+        <th>Time</th>
+        <th>Claimed By</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${assignmentRows.map(a => {
+        const icon    = a.type === 'aisle' ? '🗺' : '🔍';
+        const label   = a.description || a.value;
+        const time    = new Date(a.assigned_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+        const claimed = a.claimed_by || '—';
+        const status  = a.claimed_by ? '✅ In Progress / Complete' : '⏳ Unclaimed';
+        const statusColor = a.claimed_by ? '#10b981' : '#f59e0b';
+        return `<tr>
+          <td style="font-weight:700">${icon} ${label}</td>
+          <td>${a.assigned_by || 'Control Center'}</td>
+          <td style="font-family:monospace">${time}</td>
+          <td style="font-weight:700">${claimed}</td>
+          <td style="color:${statusColor};font-weight:700">${status}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>` : ''}
 
   <div class="section-title">Session Summary</div>
   <div class="kpi-row">
