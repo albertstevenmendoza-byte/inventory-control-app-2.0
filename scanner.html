@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -286,7 +285,6 @@ input,select,textarea{font-family:inherit}
 <div id="toast" class="toast"><span id="toast-text"></span></div>
 
 <!-- SCREEN 1: SETUP -->
-
 <div id="screen-setup" class="screen active">
   <div class="header">
     <div>
@@ -304,14 +302,12 @@ input,select,textarea{font-family:inherit}
   </div>
 
   <!-- Audit mode toggle -->
-
   <div class="mode-bar">
     <button class="mode-btn active-std" id="mode-std"   onclick="setAuditMode('standard')">📦 Standard</button>
     <button class="mode-btn"            id="mode-fresh" onclick="setAuditMode('fresh')">🧊 Fresh / Perishable</button>
   </div>
 
   <!-- FRESH SHELL -->
-
   <div class="fresh-shell" id="fresh-shell">
     <div class="fresh-step-1">
       <div class="fresh-step-label">Step 1 — Select Product</div>
@@ -368,7 +364,6 @@ input,select,textarea{font-family:inherit}
   </div>
 
   <!-- Standard setup content -->
-
   <div class="setup-content" id="setup-content">
     <div class="stat-row">
       <div class="stat-box"><div class="stat-val" id="stat-loaded">—</div><div class="stat-label">SAP Items</div></div>
@@ -393,7 +388,6 @@ input,select,textarea{font-family:inherit}
 </div>
 
 <!-- SCREEN 2: COUNTING -->
-
 <div id="screen-counting" class="screen">
   <div class="header">
     <button class="hdr-btn" onclick="backToSetup()">← Back</button>
@@ -428,7 +422,6 @@ input,select,textarea{font-family:inherit}
 </div>
 
 <!-- MOVE MODAL -->
-
 <div id="modal-move">
   <div class="move-box">
     <h3 style="color:var(--purple);font-size:16px;font-weight:800;margin-bottom:16px">🔄 Move Item</h3>
@@ -447,16 +440,43 @@ input,select,textarea{font-family:inherit}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script src="novus-core.js"></script>
-
 <script>
 'use strict';
 
 /* ══════════════════════════════════════════════════════
    FRESH SKU DICTIONARY
 ══════════════════════════════════════════════════════ */
-const FRESH_SKU_DESCRIPTIONS = {
+const ALL_BINS = {
+  'WA': ["WA01A", "WA01B", "WA02A", "WA02B", "WA03A", "WA03B", "WA04A", "WA04B", "WA05A", "WA05B", "WA06A", "WA06B", "WA07A", "WA07B", "WA08A", "WA08B", "WA09A", "WA09B", "WA100", "WA10A", "WA10B", "WA11A", "WA11B", "WA12A", "WA12B", "WA13A", "WA13B", "WA14A", "WA14B", "WA15A", "WA15B", "WA16A", "WA16B", "WA17A", "WA17B", "WA18A", "WA18B", "WA19A", "WA20A", "WA20B", "WA21A", "WA21B", "WA22B", "WA22C", "WA23B", "WA24B", "WA25B", "WA26A", "WA26B", "WA26C", "WA27A", "WA27B", "WA28A", "WA28B", "WA28C", "WA29A", "WA29B", "WA29C", "WA30A", "WA30B", "WA30C", "WA31A", "WA31B", "WA31C", "WA32A", "WA32B", "WA32C", "WA33A", "WA33B", "WA33C", "WA34A", "WA34B", "WA34C", "WA35A", "WA35B", "WA35C", "WA36A", "WA36B", "WA36C"],
+  'WB': ["WB00A", "WB00B", "WB00C", "WB01A", "WB01B", "WB01C", "WB02A", "WB02B", "WB02C", "WB03A", "WB03B", "WB03C", "WB04A", "WB04B", "WB04C", "WB05A", "WB05B", "WB05C", "WB06A", "WB06B", "WB06C", "WB07A", "WB07B", "WB07C", "WB08A", "WB08B", "WB08C", "WB09A", "WB09B", "WB09C", "WB100", "WB10A", "WB10B", "WB10C", "WB11A", "WB11B", "WB11C", "WB12A", "WB12B", "WB12C", "WB13A", "WB13B", "WB13C", "WB14A", "WB14B", "WB14C", "WB15A", "WB15B", "WB15C", "WB16A", "WB16B", "WB16C", "WB17A", "WB17B", "WB17C", "WB18A", "WB18B", "WB18C", "WB19A", "WB19B", "WB20A", "WB20B", "WB21A", "WB21B", "WB21C", "WB22A", "WB22B", "WB22C", "WB23B", "WB24B", "WB25B", "WB26A", "WB26B", "WB26C", "WB27A", "WB27B", "WB27C", "WB28A", "WB28B", "WB28C", "WB29A", "WB29B", "WB29C", "WB30A", "WB30B", "WB30C", "WB31A", "WB31B", "WB31C", "WB32A", "WB32B", "WB32C", "WB33A", "WB33B", "WB33C", "WB34A", "WB34B", "WB34C", "WB35A", "WB35B", "WB35C", "WB36A", "WB36B", "WB36C", "WB37A", "WB37B", "WB37C", "WB38A", "WB38B", "WB38C"],
+  'WC': ["WC00A", "WC00B", "WC00C", "WC01A", "WC01B", "WC01C", "WC02A", "WC02B", "WC02C", "WC03A", "WC03B", "WC03C", "WC04A", "WC04B", "WC04C", "WC05A", "WC05B", "WC05C", "WC06A", "WC06B", "WC06C", "WC07A", "WC07B", "WC07C", "WC08A", "WC08B", "WC08C", "WC09A", "WC09B", "WC09C", "WC100", "WC10A", "WC10B", "WC10C", "WC11A", "WC11B", "WC11C", "WC12A", "WC12B", "WC12C", "WC13A", "WC13B", "WC13C", "WC14A", "WC14B", "WC14C", "WC15A", "WC15B", "WC15C", "WC16A", "WC16B", "WC16C", "WC17A", "WC17B", "WC17C", "WC18A", "WC18B", "WC18C", "WC19A", "WC19B", "WC19C", "WC20A", "WC20B", "WC20C", "WC21A", "WC21B", "WC21C", "WC22A", "WC22B", "WC22C", "WC23B", "WC24B", "WC25B", "WC26A", "WC26B", "WC26C", "WC27A", "WC27B", "WC27C", "WC28A", "WC28B", "WC28C", "WC29A", "WC29B", "WC29C", "WC30A", "WC30B", "WC30C", "WC31A", "WC31B", "WC31C", "WC32A", "WC32B", "WC32C", "WC33A", "WC33B", "WC33C", "WC34A", "WC34B", "WC34C", "WC35A", "WC35B", "WC35C", "WC36A", "WC36B", "WC36C", "WC37A", "WC37B", "WC37C", "WC38A", "WC38B", "WC38C"],
+  'WD': ["WD00A", "WD00B", "WD00C", "WD01A", "WD01B", "WD01C", "WD02A", "WD02B", "WD02C", "WD03A", "WD03B", "WD03C", "WD04A", "WD04B", "WD04C", "WD05A", "WD05B", "WD05C", "WD06A", "WD06B", "WD06C", "WD07A", "WD07B", "WD07C", "WD08A", "WD08B", "WD08C", "WD09A", "WD09B", "WD09C", "WD100", "WD10A", "WD10B", "WD10C", "WD11A", "WD11B", "WD11C", "WD12A", "WD12B", "WD12C", "WD13A", "WD13B", "WD13C", "WD14A", "WD14B", "WD14C", "WD15A", "WD15B", "WD15C", "WD16A", "WD16B", "WD16C", "WD17A", "WD17B", "WD17C", "WD18A", "WD18B", "WD18C", "WD19A", "WD19B", "WD19C", "WD20A", "WD20B", "WD20C", "WD21A", "WD21B", "WD21C", "WD22A", "WD22B", "WD22C", "WD23B", "WD24B", "WD25B", "WD26A", "WD26B", "WD26C", "WD27A", "WD27B", "WD27C", "WD28A", "WD28B", "WD28C", "WD29A", "WD29B", "WD29C", "WD30A", "WD30B", "WD30C", "WD31A", "WD31B", "WD31C", "WD32A", "WD32B", "WD32C", "WD33A", "WD33B", "WD33C", "WD34A", "WD34B", "WD34C", "WD35A", "WD35B", "WD35C", "WD36A", "WD36B", "WD36C", "WD37A", "WD37B", "WD37C", "WD38A", "WD38B", "WD38C"],
+  'WE': ["WE00A", "WE00B", "WE00C", "WE01A", "WE01B", "WE01C", "WE02A", "WE02B", "WE02C", "WE03A", "WE03B", "WE03C", "WE04A", "WE04B", "WE04C", "WE05A", "WE05B", "WE05C", "WE06A", "WE06B", "WE06C", "WE07A", "WE07B", "WE07C", "WE08A", "WE08B", "WE08C", "WE09A", "WE09B", "WE09C", "WE100", "WE10A", "WE10B", "WE10C", "WE11A", "WE11B", "WE11C", "WE12A", "WE12B", "WE12C", "WE13A", "WE13B", "WE13C", "WE14A", "WE14B", "WE14C", "WE15A", "WE15B", "WE15C", "WE16A", "WE16B", "WE16C", "WE17A", "WE17B", "WE17C", "WE18A", "WE18B", "WE18C", "WE19A", "WE19B", "WE19C", "WE20A", "WE20B", "WE20C", "WE21A", "WE21B", "WE21C", "WE22A", "WE22B", "WE22C", "WE23B", "WE24B", "WE25B", "WE26A", "WE26B", "WE26C", "WE27A", "WE27B", "WE27C", "WE28A", "WE28B", "WE28C", "WE29A", "WE29B", "WE29C", "WE30A", "WE30B", "WE30C", "WE31A", "WE31B", "WE31C", "WE32A", "WE32B", "WE32C", "WE33A", "WE33B", "WE33C", "WE34A", "WE34B", "WE34C", "WE35A", "WE35B", "WE35C", "WE36A", "WE36B", "WE36C", "WE37A", "WE37B", "WE37C", "WE38A", "WE38B", "WE38C"],
+  'WF': ["WF00A", "WF00B", "WF00C", "WF01A", "WF01B", "WF01C", "WF02A", "WF02B", "WF02C", "WF03A", "WF03B", "WF03C", "WF04A", "WF04B", "WF04C", "WF05A", "WF05B", "WF05C", "WF06A", "WF06B", "WF06C", "WF07A", "WF07B", "WF07C", "WF08A", "WF08B", "WF08C", "WF09A", "WF09B", "WF09C", "WF100", "WF10A", "WF10B", "WF10C", "WF11A", "WF11B", "WF11C", "WF12A", "WF12B", "WF12C", "WF13A", "WF13B", "WF13C", "WF14A", "WF14B", "WF14C", "WF15A", "WF15B", "WF15C", "WF16A", "WF16B", "WF16C", "WF17A", "WF17B", "WF17C", "WF18A", "WF18B", "WF18C", "WF19A", "WF19B", "WF20A", "WF20B", "WF21A", "WF21B", "WF21C", "WF22A", "WF22B", "WF22C", "WF23B", "WF24B", "WF25B", "WF26A", "WF26B", "WF27A", "WF27B", "WF28A", "WF28B", "WF28C", "WF29A", "WF29B", "WF29C", "WF30A", "WF30B", "WF30C", "WF31A", "WF31B", "WF31C", "WF32A", "WF32B", "WF32C", "WF33A", "WF33B", "WF33C", "WF34A", "WF34B", "WF34C", "WF35A", "WF35B", "WF35C", "WF36A", "WF36B", "WF36C", "WF37A", "WF37B", "WF37C", "WF38A", "WF38B", "WF38C"],
+  'FREEZE': ["FA01A", "FA01B", "FA02A", "FA02B", "FA03A", "FA03B", "FA04A", "FA04B", "FA05A", "FA05B", "FA06A", "FA06B", "FA07A", "FA07B", "FA08A", "FA08B", "FB01A", "FB01B", "FB02A", "FB02B", "FB03A", "FB03B", "FB04A", "FB04B", "FB05A", "FB05B", "FB06A", "FB06B", "FB07A", "FB07B", "FB08A", "FB08B", "FC01A", "FC01B", "FC02A", "FC02B", "FC03A", "FC03B", "FC04A", "FC04B", "FC05A", "FC05B", "FC06A", "FC06B", "FC07A", "FC07B", "FC08A", "FC08B", "FD01A", "FD01B", "FD02A", "FD02B", "FD03A", "FD03B", "FD04A", "FD04B", "FD05A", "FD05B", "FD06A", "FD06B", "FD07A", "FD07B", "FD08A", "FD08B", "FD09A", "FD09B", "FD10A", "FD10B", "FZ100"],
+  'WG': ["WG00A", "WG00B", "WG00C", "WG01A", "WG01B", "WG01C", "WG02A", "WG02B", "WG02C", "WG03A", "WG03B", "WG03C", "WG04A", "WG04B", "WG04C", "WG05A", "WG05B", "WG05C", "WG06A", "WG06B", "WG06C", "WG07A", "WG07B", "WG07C", "WG08A", "WG08B", "WG08C", "WG09A", "WG09B", "WG09C", "WG100", "WG10A", "WG10B", "WG10C", "WG11A", "WG11B", "WG11C", "WG12A", "WG12B", "WG12C", "WG13A", "WG13B", "WG13C", "WG14A", "WG14B", "WG14C", "WG15A", "WG15B", "WG15C", "WG16A", "WG16B", "WG16C", "WG17A", "WG17B", "WG18A", "WG18B", "WG19A", "WG19B", "WG20A", "WG20B", "WG21A", "WG21B", "WG22A", "WG22B", "WG23B", "WG24B", "WG25B", "WG26A", "WG26B", "WG27A", "WG27B", "WG28A", "WG28B", "WG28C", "WG29A", "WG29B", "WG29C", "WG30A", "WG30B", "WG30C", "WG31A", "WG31B", "WG31C", "WG32A", "WG32B", "WG32C", "WG33A", "WG33B", "WG33C", "WG34A", "WG34B", "WG34C", "WG35A", "WG35B", "WG35C", "WG36A", "WG36B", "WG36C", "WG37A", "WG37B", "WG37C", "WG38A", "WG38B", "WG38C"],
+  'WH': ["WH01A", "WH01B", "WH01C", "WH02A", "WH02B", "WH02C", "WH03A", "WH03B", "WH03C", "WH04A", "WH04B", "WH04C", "WH05A", "WH05B", "WH05C", "WH06A", "WH06B", "WH06C", "WH07A", "WH07B", "WH07C", "WH08A", "WH08B", "WH08C", "WH09A", "WH09B", "WH09C", "WH100", "WH10A", "WH10B", "WH10C", "WH11A", "WH11B", "WH11C", "WH12A", "WH12B", "WH12C", "WH13A", "WH13B", "WH13C", "WH14A", "WH14B", "WH14C", "WH15A", "WH15B", "WH15C", "WH16A", "WH16B", "WH16C", "WH17A", "WH17B", "WH17C", "WH18A", "WH18B", "WH18C", "WH19A", "WH19B", "WH20A", "WH20B", "WH21A", "WH21B", "WH22A", "WH22B", "WH23B", "WH24B", "WH25B", "WH26A", "WH26B", "WH26C", "WH27A", "WH27B", "WH27C", "WH28A", "WH28B", "WH28C", "WH29A", "WH29B", "WH29C", "WH30A", "WH30B", "WH30C", "WH31A", "WH31B", "WH31C", "WH32A", "WH32B", "WH32C", "WH33A", "WH33B", "WH33C", "WH34A", "WH34B", "WH34C", "WH35A", "WH35B", "WH35C", "WH36A", "WH36B", "WH36C", "WH37A", "WH37B", "WH37C", "WH38A", "WH38B", "WH38C"],
+  'WJ': ["WJ01A", "WJ01B", "WJ01C", "WJ02A", "WJ02B", "WJ02C", "WJ03A", "WJ03B", "WJ03C", "WJ04A", "WJ04B", "WJ04C", "WJ05A", "WJ05B", "WJ05C", "WJ06A", "WJ06B", "WJ06C", "WJ07A", "WJ07B", "WJ07C", "WJ08A", "WJ08B", "WJ08C", "WJ09A", "WJ09B", "WJ09C", "WJ100", "WJ10A", "WJ10B", "WJ10C", "WJ11A", "WJ11B", "WJ11C", "WJ12A", "WJ12B", "WJ12C", "WJ13A", "WJ13B", "WJ13C", "WJ14A", "WJ14B", "WJ14C", "WJ15A", "WJ15B", "WJ15C", "WJ16A", "WJ16B", "WJ16C", "WJ17A", "WJ17B", "WJ17C", "WJ18A", "WJ18B", "WJ18C", "WJ19A", "WJ19B", "WJ19C", "WJ20A", "WJ20B", "WJ20C", "WJ21A", "WJ21B", "WJ22A", "WJ22B", "WJ26A", "WJ26B", "WJ26C", "WJ27A", "WJ27B", "WJ27C", "WJ28A", "WJ28B", "WJ28C", "WJ29A", "WJ29B", "WJ29C", "WJ30A", "WJ30B", "WJ30C", "WJ31A", "WJ31B", "WJ31C", "WJ32A", "WJ32B", "WJ32C", "WJ33A", "WJ33B", "WJ33C", "WJ34A", "WJ34B", "WJ34C", "WJ35A", "WJ35B", "WJ35C", "WJ36A", "WJ36B", "WJ36C", "WJ37A", "WJ37B", "WJ37C", "WJ38A", "WJ38B", "WJ38C"],
+  'WK': ["WK00A", "WK00B", "WK00C", "WK01A", "WK01B", "WK01C", "WK02A", "WK02B", "WK02C", "WK03A", "WK03B", "WK03C", "WK04A", "WK04B", "WK04C", "WK05A", "WK05B", "WK05C", "WK06A", "WK06B", "WK06C", "WK07A", "WK07B", "WK07C", "WK08A", "WK08B", "WK08C", "WK09A", "WK09B", "WK09C", "WK100", "WK10A", "WK10B", "WK10C", "WK11A", "WK11B", "WK11C", "WK12A", "WK12B", "WK12C", "WK13A", "WK13B", "WK13C", "WK14A", "WK14B", "WK14C", "WK15A", "WK15B", "WK15C", "WK16A", "WK16B", "WK16C", "WK17A", "WK17B", "WK17C", "WK18A", "WK18B", "WK18C", "WK19A", "WK19B", "WK19C", "WK20A", "WK20B", "WK20C", "WK21A", "WK21B", "WK21C", "WK22A", "WK22B", "WK22C", "WK23A", "WK23B", "WK23C", "WK24A", "WK24B", "WK24C", "WK25A", "WK25B", "WK25C", "WK26A", "WK26B", "WK26C", "WK27A", "WK27B", "WK27C", "WK28A", "WK28B", "WK28C", "WK29A", "WK29B", "WK29C", "WK30A", "WK30B", "WK30C", "WK31A", "WK31B", "WK31C", "WK32A", "WK32B", "WK32C", "WK33A", "WK33B", "WK33C", "WK34A", "WK34B", "WK34C"],
+  'WL': ["WL00A", "WL00B", "WL00C", "WL01A", "WL01B", "WL01C", "WL02A", "WL02B", "WL02C", "WL03A", "WL03B", "WL03C", "WL04A", "WL04B", "WL04C", "WL05A", "WL05B", "WL05C", "WL06A", "WL06B", "WL06C", "WL07A", "WL07B", "WL07C", "WL08A", "WL08B", "WL08C", "WL09A", "WL09B", "WL09C", "WL100", "WL10A", "WL10B", "WL10C", "WL11A", "WL11B", "WL11C", "WL12A", "WL12B", "WL12C", "WL13A", "WL13B", "WL13C", "WL14A", "WL14B", "WL14C", "WL15A", "WL15B", "WL15C", "WL16A", "WL16B", "WL16C", "WL17A", "WL17B", "WL17C", "WL18A", "WL18B", "WL18C", "WL19A", "WL19B", "WL19C", "WL20A", "WL20B", "WL20C", "WL21A", "WL21B", "WL21C", "WL22A", "WL22B", "WL22C", "WL23A", "WL23B", "WL23C", "WL24A", "WL24B", "WL24C", "WL25A", "WL25B", "WL25C", "WL26A", "WL26B", "WL26C", "WL27A", "WL27B", "WL27C", "WL28A", "WL28B", "WL28C", "WL29A", "WL29B", "WL29C", "WL30A", "WL30B", "WL30C", "WL31A", "WL31B", "WL31C", "WL32A", "WL32B", "WL32C", "WL33A", "WL33B", "WL33C", "WL34A", "WL34B", "WL34C"],
+  'LABEL': ["LR01A", "LR01B", "LR01C", "LR02A", "LR02B", "LR02C", "LR03A", "LR03B", "LR03C", "LR04A", "LR04B", "LR04C", "LR05A", "LR05B", "LR05C", "LR06A", "LR06B", "LR06C", "LR07A", "LR07B", "LR07C", "LR08A", "LR08B", "LR08C", "LR09A", "LR09B", "LR09C"],
+  'WM': ["WM01A", "WM01B", "WM01C", "WM02A", "WM02B", "WM02C", "WM03A", "WM03B", "WM03C", "WM04A", "WM04B", "WM04C", "WM05A", "WM05B", "WM05C", "WM06A", "WM06B", "WM06C", "WM07A", "WM07B", "WM07C", "WM08A", "WM08B", "WM08C", "WM09A", "WM09B", "WM09C", "WM100", "WM10A", "WM10B", "WM10C", "WM11A", "WM11B", "WM11C", "WM12A", "WM12B", "WM12C", "WM13A", "WM13B", "WM13C", "WM14A", "WM14B", "WM14C", "WM15A", "WM15B", "WM15C", "WM16A", "WM16B", "WM16C", "WM17A", "WM17B", "WM17C", "WM18A", "WM18B", "WM18C", "WM19A", "WM19B", "WM19C", "WM20A", "WM20B", "WM20C", "WM21A", "WM21B", "WM21C", "WM22A", "WM22B", "WM22C", "WM23A", "WM23B", "WM23C", "WM24A", "WM24B", "WM24C", "WM25A", "WM25B", "WM25C", "WM26A", "WM26B", "WM26C", "WM27A", "WM27B", "WM27C", "WM28A", "WM28B", "WM28C", "WM29A", "WM29B", "WM29C", "WM30A", "WM30B", "WM30C", "WM31A", "WM31B", "WM31C", "WM32A", "WM32B", "WM32C", "WM33A", "WM33B", "WM33C", "WM34B", "WM34C", "WM35B", "WM35C"],
+  'WN': ["WN01A", "WN01B", "WN01C", "WN02A", "WN02B", "WN02C", "WN03A", "WN03B", "WN03C", "WN04A", "WN04B", "WN04C", "WN05A", "WN05B", "WN05C", "WN06A", "WN06B", "WN06C", "WN07A", "WN07B", "WN07C", "WN08A", "WN08B", "WN08C", "WN09A", "WN09B", "WN09C", "WN100", "WN10A", "WN10B", "WN10C", "WN11A", "WN11B", "WN11C", "WN12A", "WN12B", "WN12C", "WN13A", "WN13B", "WN13C", "WN14A", "WN14B", "WN14C", "WN15A", "WN15B", "WN15C", "WN16A", "WN16B", "WN16C", "WN17A", "WN17B", "WN17C", "WN18A", "WN18B", "WN18C", "WN19A", "WN19B", "WN19C", "WN20A", "WN20B", "WN20C", "WN21A", "WN21B", "WN21C", "WN22A", "WN22B", "WN22C", "WN23A", "WN23B", "WN23C", "WN24A", "WN24B", "WN24C", "WN25A", "WN25B", "WN25C", "WN26A", "WN26B", "WN26C", "WN27A", "WN27B", "WN27C", "WN28A", "WN28B", "WN28C"],
+  'WP': ["WP01A", "WP01B", "WP01C", "WP02A", "WP02B", "WP02C", "WP03A", "WP03B", "WP03C", "WP04A", "WP04B", "WP04C", "WP05A", "WP05B", "WP05C", "WP06A", "WP06B", "WP06C", "WP07A", "WP07B", "WP07C", "WP08A", "WP08B", "WP08C", "WP09A", "WP09B", "WP09C", "WP100", "WP10A", "WP10B", "WP10C", "WP11A", "WP11B", "WP11C", "WP12A", "WP12B", "WP12C", "WP13A", "WP13B", "WP13C", "WP14A", "WP14B", "WP14C", "WP15A", "WP15B", "WP15C", "WP16A", "WP16B", "WP16C", "WP17A", "WP17B", "WP17C", "WP18A", "WP18B", "WP18C", "WP19A", "WP19B", "WP19C", "WP20A", "WP20B", "WP20C", "WP21A", "WP21B", "WP21C", "WP22A", "WP22B", "WP22C", "WP23A", "WP23B", "WP23C", "WP24A", "WP24B", "WP24C", "WP25A", "WP25B", "WP25C", "WP26A", "WP26B", "WP26C", "WP27A", "WP27B", "WP27C", "WP28A", "WP28B", "WP28C", "WP29A", "WP29B", "WP29C", "WP30A", "WP30B", "WP30C"],
+  'PRODUCTION': ["MIXAREA1_HU", "MIXAREA1_HU_FIX", "MIXAREA2_HU", "MIXAREA2_HU_FIX", "PACKRM1_HU", "PACKRM1_NHU", "PACKRM2_HU", "PACKRM2_NHU", "SPICE-BLND-FLOOR", "SPICERM_HU"],
+  'RECEIVING': ["RECV-HOLD", "RECV01", "RECV02", "RECV03", "RECV04", "RECV05"],
+  'STAGING': ["B101", "B102", "B103", "B104", "B105", "B106", "B107", "B108", "B109", "B110", "B111", "B112", "B113", "B114", "STG-INSIDE-01", "STG-INSIDE-02", "STG03", "STG04", "STG05", "STG06", "STG07", "STG08", "STG09", "STG10", "STG11", "STG12", "STG13", "STG14", "STG_RTN"],
+};
+
+// Zone display metadata
+const ZONE_META = {
+  'WA':'A','WB':'B','WC':'C','WD':'D','WE':'E','WF':'F','WG':'G',
+  'WH':'H','WJ':'J','WK':'K','WL':'L','WM':'M','WN':'N','WP':'P',
+  'FREEZE':'❄','LABEL':'🏷','STAGING':'📦','RECEIVING':'🚚','PRODUCTION':'🏭',
+};
+
+const const FRESH_SKU_DESCRIPTIONS = {
   '3305704': 'Whole Fresh Poblano Peppers w/Stems',
   '3307506': 'Pepper Bell Whole Grn Fresh',
   '3307509': 'Pepper Bell Whole Red',
@@ -933,21 +953,27 @@ function buildIndexes() {
   updateDoneCount(); buildAisleGrid();
 }
 function updateDoneCount() {
-  const totalBins=Object.keys(sapByBin).length;
-  document.getElementById('stat-done').textContent=completedBins.size;
-  document.getElementById('stat-progress').textContent=`${completedBins.size} / ${totalBins}`;
+  const totalBins = Object.values(ALL_BINS).flat().length;
+  document.getElementById('stat-done').textContent  = completedBins.size;
+  document.getElementById('stat-progress').textContent = `${completedBins.size} / ${totalBins}`;
 }
 function buildAisleGrid() {
   const grid=document.getElementById('aisle-grid'); grid.innerHTML='';
-  AISLE_ROWS.forEach(letter=>{
-    const bins=Object.keys(sapByBin).filter(b=>b.charAt(1)===letter);
-    const done=bins.filter(b=>completedBins.has(b)).length, total=bins.length;
-    const pct=total>0?Math.round(done/total*100):0;
-    const allDone=total>0&&done>=total, inProg=done>0&&!allDone;
-    const btn=document.createElement('button');
-    btn.className=`aisle-btn${allDone?' done':inProg?' in-progress':''}`;
-    btn.innerHTML=`<span class="a-letter">${letter}</span><span class="a-count">${done}/${total}</span><div class="aisle-prog" style="width:${pct}%"></div>`;
-    btn.onclick=()=>selectAisle(letter);
+  Object.keys(ALL_BINS).sort().forEach(zoneKey=>{
+    const zoneBins = ALL_BINS[zoneKey];
+    const sapCount = zoneBins.filter(b => sapByBin[b]).length;
+    const done     = zoneBins.filter(b => completedBins.has(b)).length;
+    const total    = zoneBins.length;
+    const pct      = total > 0 ? Math.round(done / total * 100) : 0;
+    const allDone  = done > 0 && done >= zoneBins.filter(b => sapByBin[b]).length && sapCount > 0;
+    const inProg   = done > 0 && !allDone;
+    const label    = ZONE_META[zoneKey] || zoneKey;
+    const isSpecial= zoneKey.length > 2;
+    const btn = document.createElement('button');
+    btn.className = `aisle-btn${allDone?' done':inProg?' in-progress':''}${isSpecial?' special-zone':''}`;
+    if (isSpecial) btn.style.cssText += 'font-size:13px;letter-spacing:-.2px;';
+    btn.innerHTML = `<span class="a-letter" style="${isSpecial?'font-size:18px':''}">${label}</span><span class="a-count">${sapCount > 0 ? done+'/'+sapCount+' SAP' : total+' bins'}</span><div class="aisle-prog" style="width:${pct}%"></div>`;
+    btn.onclick = () => selectZone(zoneKey);
     grid.appendChild(btn);
   });
 }
@@ -989,11 +1015,14 @@ function searchProduct() {
 /* ══════════════════════════════════════════════════════
    STANDARD NAVIGATION
 ══════════════════════════════════════════════════════ */
-function selectAisle(letter) {
-  targetProduct=null; activeAisle=letter;
-  const limit='BC'.includes(letter)?25:38; aisleBins=[];
-  for(let n=0;n<=limit;n++) ['A','B','C'].forEach(s=>aisleBins.push(`W${letter}${String(n).padStart(2,'0')}${s}`));
-  binIdx=0; navigateToBin(aisleBins[0]);
+function selectAisle(letter) { selectZone('W' + letter); }
+function selectZone(zoneKey) {
+  targetProduct = null;
+  activeAisle   = zoneKey;
+  aisleBins     = ALL_BINS[zoneKey] || [];
+  binIdx        = 0;
+  if (!aisleBins.length) { toast('No bins in this zone', 'amber'); return; }
+  navigateToBin(aisleBins[0]);
 }
 function navigateToBin(bin) {
   if(!bin) return;
@@ -1006,7 +1035,7 @@ function navigateToBin(bin) {
   switchScreen('counting');
   document.getElementById('count-bin-title').textContent=currentBin;
   document.getElementById('bin-input').value=currentBin;
-  document.getElementById('count-aisle-label').textContent=activeAisle?`Aisle ${currentBin.charAt(1)}`:'';
+  document.getElementById('count-aisle-label').textContent=activeAisle?(activeAisle.length===1?`Aisle ${activeAisle}`:activeAisle):'';
   renderPhase(); renderStrip(); renderHUList(); updateFinalizeBtn();
 }
 function stepBin(dir){const n=binIdx+dir;if(n>=0&&n<aisleBins.length){binIdx=n;navigateToBin(aisleBins[n]);}}
@@ -1163,6 +1192,5 @@ function updateSyncDot(){document.querySelectorAll('.sync-dot').forEach(d=>{d.cl
 function updateQueueBadge(){const b=document.getElementById('queue-badge');if(!b)return;if(offlineQueue.length>0){b.textContent=`${offlineQueue.length} queued`;b.classList.remove('hidden');}else b.classList.add('hidden');}
 function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 </script>
-
 </body>
 </html>
