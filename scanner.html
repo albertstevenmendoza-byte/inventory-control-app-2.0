@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -285,6 +286,7 @@ input,select,textarea{font-family:inherit}
 <div id="toast" class="toast"><span id="toast-text"></span></div>
 
 <!-- SCREEN 1: SETUP -->
+
 <div id="screen-setup" class="screen active">
   <div class="header">
     <div>
@@ -302,12 +304,14 @@ input,select,textarea{font-family:inherit}
   </div>
 
   <!-- Audit mode toggle -->
+
   <div class="mode-bar">
     <button class="mode-btn active-std" id="mode-std"   onclick="setAuditMode('standard')">📦 Standard</button>
     <button class="mode-btn"            id="mode-fresh" onclick="setAuditMode('fresh')">🧊 Fresh / Perishable</button>
   </div>
 
   <!-- FRESH SHELL -->
+
   <div class="fresh-shell" id="fresh-shell">
     <div class="fresh-step-1">
       <div class="fresh-step-label">Step 1 — Select Product</div>
@@ -364,6 +368,7 @@ input,select,textarea{font-family:inherit}
   </div>
 
   <!-- Standard setup content -->
+
   <div class="setup-content" id="setup-content">
     <div class="stat-row">
       <div class="stat-box"><div class="stat-val" id="stat-loaded">—</div><div class="stat-label">SAP Items</div></div>
@@ -388,6 +393,7 @@ input,select,textarea{font-family:inherit}
 </div>
 
 <!-- SCREEN 2: COUNTING -->
+
 <div id="screen-counting" class="screen">
   <div class="header">
     <button class="hdr-btn" onclick="backToSetup()">← Back</button>
@@ -422,6 +428,7 @@ input,select,textarea{font-family:inherit}
 </div>
 
 <!-- MOVE MODAL -->
+
 <div id="modal-move">
   <div class="move-box">
     <h3 style="color:var(--purple);font-size:16px;font-weight:800;margin-bottom:16px">🔄 Move Item</h3>
@@ -440,7 +447,9 @@ input,select,textarea{font-family:inherit}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script src="novus-core.js"></script>
+
 <script>
 'use strict';
 
@@ -525,6 +534,7 @@ document.getElementById('fresh-sku-select').addEventListener('change', function(
   setFreshSubMode(freshSubMode);
 });
 
+requireName();
 pullCloud();
 
 /* ══════════════════════════════════════════════════════
@@ -941,7 +951,31 @@ function buildAisleGrid() {
     grid.appendChild(btn);
   });
 }
-function promptName() { const name=prompt('Your name:',NovusSettings.getUser()); if(name!==null){NovusSettings.set('userName',name.trim());document.getElementById('name-display').textContent=name.trim()||'Set Name';} }
+function promptName() {
+  const current = NovusSettings.getUser() || '';
+  const name = prompt('Your name:', current);
+  if (name !== null && name.trim()) {
+    NovusSettings.set('userName', name.trim());
+    document.getElementById('name-display').textContent = name.trim();
+  } else if (!current) {
+    toast('Name is required to start counting', 'amber');
+  }
+}
+
+function requireName() {
+  const user = NovusSettings.getUser();
+  if (user) { document.getElementById('name-display').textContent = user; return; }
+  // Block until name is entered
+  let name = '';
+  while (!name) {
+    name = prompt('Enter your name to begin counting:');
+    if (name !== null) name = name.trim();
+    if (!name) { name = ''; alert('A name is required to use the Cycle Counter.'); }
+  }
+  NovusSettings.set('userName', name);
+  document.getElementById('name-display').textContent = name;
+  toast('Welcome, ' + name + '!', 'green');
+}
 function searchProduct() {
   const prod=document.getElementById('product-search').value.trim().toUpperCase();
   if(!prod) return;
@@ -1129,5 +1163,6 @@ function updateSyncDot(){document.querySelectorAll('.sync-dot').forEach(d=>{d.cl
 function updateQueueBadge(){const b=document.getElementById('queue-badge');if(!b)return;if(offlineQueue.length>0){b.textContent=`${offlineQueue.length} queued`;b.classList.remove('hidden');}else b.classList.add('hidden');}
 function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 </script>
+
 </body>
 </html>
