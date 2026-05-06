@@ -1300,15 +1300,20 @@ async function pushAssignments() {
   const prod = document.getElementById('prod-assign')?.value.trim();
   if (prod) list.push({ type: 'product', value: prod, description: `Product: ${prod}` });
   if (!list.length) { toast('Select at least one aisle or product', 'amber'); return; }
+
+  // Prompt for the manager's name before pushing
+  const name = prompt('Enter your name to push this assignment:');
+  if (!name || !name.trim()) { toast('Name is required to push', 'amber'); return; }
+  const pushedBy = name.trim();
+  NovusSettings.set('userName', pushedBy);
+
   try {
-    // Insert without deleting — assignments accumulate so multiple pushes
-    // can coexist. Use Clear to wipe them all.
     const { error } = await sb.from('assignments').insert(
-      list.map(a => ({ ...a, assigned_by: NovusSettings.getUser() || 'Control Center' }))
+      list.map(a => ({ ...a, assigned_by: pushedBy }))
     );
     if (error) throw error;
     const label = list.map(a => a.description).join(', ');
-    toast(`Pushed: ${label}`, 'green');
+    toast(`Pushed by ${pushedBy}: ${label}`, 'green');
     fetchActiveAssignments();
     assignAisles.clear();
     document.querySelectorAll('.aisle-pick').forEach(b => b.classList.remove('on'));
