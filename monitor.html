@@ -2233,17 +2233,21 @@ function _renderActiveAssignments(data) {
     return;
   }
 
-  list.innerHTML = data.map(a => {
+  list.innerHTML = data.map((a, i) => {
     const icon  = a.type === 'aisle' ? '🗺' : '🔍';
     const label = a.description || a.value;
     const time  = new Date(a.assigned_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
     const by    = a.assigned_by || 'Control Center';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);animation:fade-in .2s ease">
+    return `<div onclick="openAssignmentSummary('${escHtml(a.type)}','${escHtml(a.value)}','${escHtml(label)}')"
+                 style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);animation:fade-in .2s ease;cursor:pointer;transition:border-color .15s,background .15s"
+                 onmouseover="this.style.borderColor='var(--teal)';this.style.background='var(--teal-dim)'"
+                 onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface-2)'">
       <span style="font-size:13px;flex-shrink:0">${icon}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:11px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(label)}</div>
         <div style="font-size:9px;color:var(--text-3)">${escHtml(by)} · ${time}</div>
       </div>
+      <span style="font-size:9px;color:var(--teal);font-weight:700;flex-shrink:0">View →</span>
     </div>`;
   }).join('');
 }
@@ -2459,6 +2463,130 @@ async function fetchExistingReports() {
 }
 
 // counter_report events are handled in _subscribeActiveAssignments below
+
+/* ══════════════════════════════════════════════════════
+   ASSIGNMENT SUMMARY MODAL
+══════════════════════════════════════════════════════ */
+async function openAssignmentSummary(type, value, label) {
+  const modal = document.getElementById('report-detail-modal');
+  const body  = document.getElementById('report-modal-body');
+  const title = document.getElementById('report-modal-title');
+
+  title.innerHTML = `${type === 'aisle' ? '🗺' : '🔍'} ${escHtml(label)} — Count Summary`;
+  body.innerHTML  = '<div style="padding:24px;color:var(--text-3);font-size:11px;text-align:center">⏳ Loading…</div>';
+  modal.classList.add('open');
+
+  try {
+    let query = sb.from('cycle_counts').select('*').eq('session_id', SESSION_ID);
+
+    if (type === 'aisle') {
+      // value is like 'WA' — filter by aisle letter (second char)
+      query = query.eq('aisle', value[1]);
+    } else {
+      // product assignment — filter by material
+      query = query.eq('material', value);
+    }
+
+    const { data, error } = await query
+      .neq('type', 'pallet_count')
+      .order('scanned_bin', { ascending: true });
+
+    if (error) throw error;
+
+    if (!data?.length) {
+      body.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-3)">
+        <div style="font-size:40px;margin-bottom:12px">📭</div>
+        <p style="font-weight:700">No counts recorded yet</p>
+        <p style="font-size:11px;margin-top:6px">Counters haven't started this assignment yet.</p>
+      </div>`;
+      return;
+    }
+
+    // Summary stats
+    const total    = data.length;
+    const ok       = data.filter(r => r.type === 'ok').length;
+    const disc     = total - ok;
+    const totalExp = data.reduce((s, r) => s + (Number(r.expected_qty) || 0), 0);
+    const totalScan= data.reduce((s, r) => s + (Number(r.scanned_qty)  || 0), 0);
+    const variance = totalScan - totalExp;
+
+    // Who counted and how many
+    const byCounter = {};
+    data.forEach(r => {
+      const u = r.scanned_by || 'Unknown';
+      if (!byCounter[u]) byCounter[u] = 0;
+      byCounter[u]++;
+    });
+    const counterList = Object.entries(byCounter)
+      .map(([u, n]) => `<span style="background:var(--surface-3);padding:3px 10px;border-radius:20px;font-size:9px;font-weight:700;color:var(--text-2)">👤 ${escHtml(u)} (${n})</span>`)
+      .join(' ');
+
+    const TYPE_STYLES = {
+      ok:           { bg:'var(--green-bg)',  color:'var(--green)',  label:'OK'         },
+      adj:          { bg:'var(--amber-bg)',  color:'var(--amber)',  label:'Adjusted'   },
+      move:         { bg:'var(--purple-bg)', color:'var(--purple)', label:'Moved'      },
+      move_adj:     { bg:'var(--surface-3)', color:'var(--purple)', label:'Moved+Adj'  },
+      missing_temp: { bg:'var(--red-bg)',    color:'var(--red)',    label:'Missing'    },
+      missing:      { bg:'var(--red-bg)',    color:'var(--red)',    label:'Missing'    },
+      unexpected:   { bg:'var(--cyan-bg)',   color:'var(--cyan)',   label:'Unexpected' },
+    };
+
+    const summaryHTML = `
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface-2)">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${counterList}</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+          ${[
+            { val: total,    lbl: 'HUs Audited', color: 'var(--accent)'  },
+            { val: ok,       lbl: 'OK',           color: 'var(--green)'  },
+            { val: disc,     lbl: 'Discrepancies',color: disc > 0 ? 'var(--red)' : 'var(--green)' },
+            { val: (variance >= 0 ? '+' : '') + variance.toLocaleString(),
+                             lbl: 'Qty Variance', color: variance === 0 ? 'var(--green)' : 'var(--amber)' },
+          ].map(k => `
+            <div style="text-align:center;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${k.color}">${k.val}</div>
+              <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-3);margin-top:4px">${k.lbl}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    const rowsHTML = data.map(r => {
+      const ts      = TYPE_STYLES[r.type] || { bg:'var(--surface-2)', color:'var(--text-2)', label: r.type };
+      const expQty  = Number(r.expected_qty) || 0;
+      const scanQty = Number(r.scanned_qty)  || 0;
+      const vari    = scanQty - expQty;
+      const variStr = vari === 0 ? '—' : (vari > 0 ? '+' : '') + vari;
+      const variColor = vari === 0 ? 'var(--text-3)' : vari > 0 ? 'var(--amber)' : 'var(--red)';
+      const movedBin  = r.scanned_bin && r.scanned_bin !== r.expected_bin;
+      return `<tr>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-3);white-space:nowrap">${escHtml(r.expected_bin || '—')}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;white-space:nowrap;color:${movedBin ? 'var(--amber)' : 'var(--text)'}">${escHtml(r.scanned_bin || '—')}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent)">${escHtml((r.hu || '').slice(-8))}</td>
+        <td style="font-size:10px;color:var(--text-2)">${escHtml(r.material || '—')}</td>
+        <td style="font-size:10px;color:var(--text-2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.description || '—')}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right">${expQty.toLocaleString()}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right;font-weight:700">${scanQty.toLocaleString()}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right;color:${variColor};font-weight:700">${variStr}</td>
+        <td style="font-size:10px;color:var(--text-3);white-space:nowrap">${escHtml(r.scanned_by || '—')}</td>
+        <td><span style="font-size:8px;font-weight:800;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:${ts.bg};color:${ts.color};white-space:nowrap">${ts.label}</span></td>
+      </tr>`;
+    }).join('');
+
+    body.innerHTML = summaryHTML + `
+      <div style="overflow-x:auto;flex:1">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead style="position:sticky;top:0;z-index:2">
+            <tr>${['Expected Bin','Found In','HU','Product','Description','SAP Qty','Count','Variance','Counter','Status']
+              .map(h => `<th style="padding:9px 12px;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text-3);background:var(--surface);text-align:left;border-bottom:1px solid var(--border-2);white-space:nowrap">${h}</th>`)
+              .join('')}</tr>
+          </thead>
+          <tbody>${rowsHTML}</tbody>
+        </table>
+      </div>`;
+
+  } catch (err) {
+    body.innerHTML = `<div style="padding:20px;color:var(--red)">Failed to load: ${escHtml(err.message)}</div>`;
+  }
+}
 
 /* ══════════════════════════════════════════════════════
    SAP FRESHNESS ENFORCEMENT — 30-minute upload requirement
