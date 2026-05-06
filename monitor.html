@@ -1272,26 +1272,30 @@ async function pushAssignments() {
   assignAisles.forEach(r => list.push({ type: 'aisle', value: `W${r}`, description: `Aisle W${r}` }));
   const prod = document.getElementById('prod-assign')?.value.trim();
   if (prod) list.push({ type: 'product', value: prod, description: `Product: ${prod}` });
-  if (!list.length) return;
+  if (!list.length) { toast('Select at least one aisle or product', 'amber'); return; }
   try {
-    await sb.from('assignments').delete().gte('assigned_at', '2000-01-01');
+    // Insert without deleting — assignments accumulate so multiple pushes
+    // can coexist. Use Clear to wipe them all.
     const { error } = await sb.from('assignments').insert(
       list.map(a => ({ ...a, assigned_by: NovusSettings.getUser() || 'Control Center' }))
     );
     if (error) throw error;
-    toast('Assignments pushed', 'green');
+    const label = list.map(a => a.description).join(', ');
+    toast(`Pushed: ${label}`, 'green');
     assignAisles.clear();
     document.querySelectorAll('.aisle-pick').forEach(b => b.classList.remove('on'));
     if (document.getElementById('prod-assign')) document.getElementById('prod-assign').value = '';
-  } catch { toast('Push failed', 'red'); }
+  } catch (err) { toast('Push failed: ' + err.message, 'red'); }
 }
 
 async function clearAssignments() {
   try {
-    await sb.from('assignments').delete().gte('assigned_at', '2000-01-01');
-    assignments = [];
+    // Only delete aisle and product assignments — preserve counter_reports
+    await sb.from('assignments')
+      .delete()
+      .in('type', ['aisle', 'product']);
     toast('Assignments cleared', 'blue');
-  } catch { toast('Clear failed', 'red'); }
+  } catch (err) { toast('Clear failed: ' + err.message, 'red'); }
 }
 
 /* ══════════════════════════════════════════════════════
