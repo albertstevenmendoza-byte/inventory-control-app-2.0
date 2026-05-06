@@ -609,6 +609,7 @@ let hiddenRows    = new Set(); // HU+bin keys hidden via Mixed Bin / Max Volume
 NovusLoader.start();
 fetchFullDashboard();
 fetchActiveAssignments();
+fetchExistingReports();
 initAislePicker();
 _subscribeRealtime();
 setInterval(pollLightweight, 30000); // fallback — Realtime handles instant updates
@@ -2224,12 +2225,16 @@ function _renderActiveAssignments(data) {
 }
 
 // Subscribe to assignments table so the summary updates live
-(function _subscribeActiveAssignments() {
-  sb.channel('monitor-active-assignments')
+(function _subscribeAssignmentsAll() {
+  sb.channel('monitor-assignments')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, payload => {
-      // Refresh the active list on any change
-      if (['aisle', 'product'].includes(payload.new?.type) ||
-          ['aisle', 'product'].includes(payload.old?.type)) {
+      const recType = payload.new?.type || payload.old?.type;
+      // Handle counter reports
+      if (recType === 'counter_report' && payload.eventType === 'INSERT') {
+        _handleCounterReport(payload);
+      }
+      // Refresh active assignments list for aisle/product changes
+      if (['aisle', 'product'].includes(recType)) {
         fetchActiveAssignments();
       }
     })
@@ -2284,14 +2289,32 @@ function _dismissReports() {
   document.getElementById('counter-report-cards').innerHTML = '';
 }
 
-// Subscribe to assignments table to catch counter_report inserts
-(function _subscribeCounterReports() {
-  sb.channel('monitor-counter-reports')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'assignments' }, payload => {
-      if (payload.new?.type === 'counter_report') _handleCounterReport(payload);
-    })
-    .subscribe();
-})();
+async function fetchExistingReports() {
+  try {
+    const todayStart = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const { data: recs, error: err2 } = await sb
+      .from('assignments')
+      .select('*')
+      .eq('type', 'counter_report')
+      .gte('assigned_at', todayStart)
+      .order('assigned_at', { ascending: true });
+    if (err2) throw err2;
+    if (!recs?.length) return;
+    recs.forEach(rec => {
+      try {
+        const summary = JSON.parse(rec.description || '{}');
+        if (!_receivedReports.find(r => r.counter === summary.counter && r.completed_at === summary.completed_at)) {
+          _receivedReports.push(summary);
+        }
+      } catch {}
+    });
+    if (_receivedReports.length) _renderCounterReports();
+  } catch (err) {
+    console.warn('[monitor] fetchExistingReports failed:', err.message);
+  }
+}
+
+// counter_report events are handled in _subscribeActiveAssignments below
 
 /* ══════════════════════════════════════════════════════
    SAP FRESHNESS ENFORCEMENT — 30-minute upload requirement
