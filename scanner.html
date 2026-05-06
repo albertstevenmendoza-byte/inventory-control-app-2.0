@@ -187,6 +187,7 @@ input,select,textarea{font-family:inherit}
 .assignment-chip{display:inline-flex;align-items:center;gap:8px;padding:12px 18px;background:var(--accent);border:none;border-radius:14px;font-size:13px;font-weight:900;color:#fff;cursor:pointer;transition:filter .15s,transform .1s;white-space:nowrap;box-shadow:0 4px 16px rgba(91,154,255,.35);letter-spacing:-.2px}
 .assignment-chip:hover{filter:brightness(1.12);transform:translateY(-2px)}
 .assignment-chip:active{transform:scale(.95)}
+.assignment-chip.claimed{background:var(--green);box-shadow:0 4px 16px rgba(52,211,153,.35)}
 @keyframes shimmer-bar{0%{background-position:0% 0}100%{background-position:200% 0}}
 .aisle-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .aisle-btn{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:0;text-align:center;font-size:22px;font-weight:900;color:var(--text);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:72px;transition:border-color .15s,background .15s,transform .1s}
@@ -1311,8 +1312,12 @@ async function fetchAssignments() {
       .select('*')
       .order('assigned_at', { ascending: false });
     if (error) throw error;
-    // Filter to only aisle/product assignments — not counter_reports
-    const active = (data || []).filter(a => a.type === 'aisle' || a.type === 'product');
+    // Show only unclaimed assignments OR ones claimed by this user
+    const me     = NovusSettings.getUser() || '';
+    const active = (data || []).filter(a =>
+      (a.type === 'aisle' || a.type === 'product') &&
+      (!a.claimed_by || a.claimed_by === me)
+    );
     if (active.length) _applyAssignments(active);
     else _clearAssignmentBanner();
   } catch (err) {
@@ -1335,9 +1340,13 @@ function _applyAssignments(data) {
 
   // Build chips
   chips.innerHTML = data.map(a => {
-    const icon  = a.type === 'aisle'   ? '🗺' : '🔍';
-    const label = a.description || a.value;
-    return `<button class="assignment-chip" onclick="_jumpToAssignment('${escHtml(a.type)}','${escHtml(a.value)}')">${icon} ${escHtml(label)}</button>`;
+    const icon    = a.type === 'aisle' ? '🗺' : '🔍';
+    const label   = a.description || a.value;
+    const claimed = a.claimed_by && a.claimed_by === (NovusSettings.getUser() || '');
+    return `<button class="assignment-chip${claimed ? ' claimed' : ''}"
+                    onclick="_claimAndJump('${escHtml(a.id)}','${escHtml(a.type)}','${escHtml(a.value)}','${escHtml(label)}')">
+              ${icon} ${escHtml(label)}${claimed ? ' ✓' : ''}
+            </button>`;
   }).join('');
 
   banner.style.display = 'block';
@@ -1413,14 +1422,33 @@ async function submitCountReport() {
   }
 }
 
-function _jumpToAssignment(type, value) {
+async function _claimAndJump(id, type, value, label) {
+  const me = NovusSettings.getUser();
+  if (!me) { toast('Set your name first', 'amber'); return; }
+
+  // Try to claim — only succeeds if still unclaimed
+  const { data, error } = await sb
+    .from('assignments')
+    .update({ claimed_by: me })
+    .eq('id', id)
+    .is('claimed_by', null)
+    .select();
+
+  if (error) { toast('Could not claim assignment', 'red'); return; }
+
+  if (!data || !data.length) {
+    // Someone else already claimed it
+    toast(`${label} was already claimed by someone else`, 'amber');
+    fetchAssignments(); // refresh to hide it
+    return;
+  }
+
+  toast(`✓ ${label} claimed by ${me}`, 'green');
+
+  // Navigate immediately
   if (type === 'aisle') {
-    // value is like 'WA' — select that zone
-    const zoneKey = value; // e.g. 'WA'
-    selectZone(zoneKey);
-    toast(`Jumping to ${value}`, 'blue');
+    selectZone(value);
   } else if (type === 'product') {
-    // value is a product number — fill the search and trigger
     setAuditMode('standard');
     document.getElementById('product-search').value = value;
     searchProduct();
