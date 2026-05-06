@@ -1312,7 +1312,6 @@ async function fetchAssignments() {
     const { data, error } = await sb
       .from('assignments')
       .select('*')
-      .order('urgent',      { ascending: false }) // urgent first
       .order('assigned_at', { ascending: false });
     if (error) throw error;
     // Show only unclaimed assignments OR ones claimed by this user
