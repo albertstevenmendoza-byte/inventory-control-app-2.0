@@ -453,7 +453,8 @@ tbody tr:hover{background:var(--surface)}
       <button class="rail-btn ghost" onclick="document.getElementById('base-workbook-input').click()" style="width:100%;padding:9px;margin-bottom:6px">
         📂 Link Daily_Tasks.xlsx
       </button>
-      <button class="rail-btn primary" onclick="exportAudit()" style="width:100%;padding:9px">📥 Export Audit (.xlsx)</button>
+      <button class="rail-btn primary" onclick="exportAudit()" style="width:100%;padding:9px;margin-bottom:6px">📥 Export Audit (.xlsx)</button>
+      <button class="rail-btn ghost" onclick="printEndOfShift()" style="width:100%;padding:9px;border-color:rgba(167,139,250,.3);color:var(--purple)">🖨 End of Shift Report</button>
     </div>
     <div class="rail-section" style="border-bottom:none">
       <div class="rail-title">Safety Summary</div>
@@ -1959,6 +1960,185 @@ async function applyResolution(select, hu, scanBin) {
     if (row) row.style.display = 'none';
     toast(`Row hidden (${value === 'mixed_bin' ? 'Mixed Bin' : 'Max Volume'})`, 'amber');
   }
+}
+
+/* ══════════════════════════════════════════════════════
+   END OF SHIFT REPORT
+══════════════════════════════════════════════════════ */
+function printEndOfShift() {
+  if (!report.length) { toast('No data to print', 'red'); return; }
+
+  const now     = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+
+  // ── Accuracy metrics (same formula as updateMetrics) ──
+  const huRows    = report.filter(r => r.type !== 'pallet_count');
+  const movedHUs  = new Set(huRows.filter(r => r.type === 'move' || r.type === 'move_adj').map(r => r.hu).filter(Boolean));
+  const effective = huRows.filter(r => !(r.type === 'missing_temp' && movedHUs.has(r.hu)));
+  const effTotal  = effective.length;
+  const wrongBin  = effective.filter(r => ['move','move_adj','unexpected','missing','missing_temp'].includes(r.type)).length;
+  const wrongQty  = effective.filter(r => ['adj','move_adj','unexpected','missing','missing_temp'].includes(r.type)).length;
+  const binAcc    = effTotal ? ((1 - wrongBin / effTotal) * 100).toFixed(1) : 'N/A';
+  const invAcc    = effTotal ? ((1 - wrongQty / effTotal) * 100).toFixed(1) : 'N/A';
+  const okCount   = effective.filter(r => r.type === 'ok').length;
+  const discCount = effTotal - okCount;
+
+  // ── Group by counter ──
+  const counters = {};
+  report.forEach(r => {
+    const name = r.user || 'Unknown';
+    if (!counters[name]) counters[name] = { bins: new Set(), rows: [] };
+    if (r.scanBin) counters[name].bins.add(r.scanBin);
+    counters[name].rows.push(r);
+  });
+
+  const TYPE_LABELS = {
+    ok: 'OK', adj: 'Adjusted', move: 'Moved', move_adj: 'Moved + Adj',
+    missing_temp: 'Missing (Pending)', missing: 'Missing', unexpected: 'Unexpected',
+    pallet_count: 'Pallet Count',
+  };
+
+  // ── Counter summary rows ──
+  const counterRows = Object.entries(counters).sort((a,b) => b[1].rows.length - a[1].rows.length).map(([name, data]) => {
+    const rows    = data.rows;
+    const bins    = data.bins.size;
+    const hu      = rows.filter(r => r.type !== 'pallet_count').length;
+    const ok      = rows.filter(r => r.type === 'ok').length;
+    const disc    = rows.filter(r => !['ok','pallet_count'].includes(r.type)).length;
+    const pallets = rows.filter(r => r.type === 'pallet_count').length;
+    return `
+      <tr>
+        <td style="font-weight:700;color:#1a1a2e">${escHtml(name)}</td>
+        <td style="text-align:center">${bins}</td>
+        <td style="text-align:center">${hu}</td>
+        <td style="text-align:center;color:#10b981;font-weight:700">${ok}</td>
+        <td style="text-align:center;color:#ef4444;font-weight:700">${disc}</td>
+        <td style="text-align:center;color:#6366f1">${pallets || '—'}</td>
+      </tr>`;
+  }).join('');
+
+  // ── Detail section: bins counted per counter ──
+  const detailSections = Object.entries(counters).sort((a,b) => a[0].localeCompare(b[0])).map(([name, data]) => {
+    // Group by bin
+    const binMap = {};
+    data.rows.forEach(r => {
+      const bin = r.scanBin || 'Unknown';
+      if (!binMap[bin]) binMap[bin] = [];
+      binMap[bin].push(r);
+    });
+
+    const binRows = Object.entries(binMap).sort((a,b) => a[0].localeCompare(b[0])).map(([bin, rows]) => {
+      const types = [...new Set(rows.map(r => TYPE_LABELS[r.type] || r.type))].join(', ');
+      const hus   = rows.filter(r => r.hu && r.hu !== 'EMPTY').map(r => r.hu).join(', ');
+      return `
+        <tr>
+          <td style="font-family:monospace;font-size:11px;font-weight:700;color:#1a1a2e">${escHtml(bin)}</td>
+          <td style="font-size:10px">${hus ? escHtml(hus.length > 60 ? hus.slice(0,60)+'…' : hus) : '—'}</td>
+          <td style="font-size:10px;text-align:center">${rows.length}</td>
+          <td style="font-size:10px">${escHtml(types)}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="counter-section">
+        <div class="counter-name">👤 ${escHtml(name)}</div>
+        <table>
+          <thead><tr><th>Bin</th><th>Handling Units</th><th>#</th><th>Results</th></tr></thead>
+          <tbody>${binRows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  // ── Build the print window HTML ──
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>End of Shift Report — ${SESSION_ID}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; background: #fff; font-size: 12px; padding: 32px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 3px solid #1a1a2e; }
+  .header-left h1 { font-size: 22px; font-weight: 900; color: #1a1a2e; letter-spacing: -0.5px; }
+  .header-left .subtitle { font-size: 11px; color: #666; margin-top: 3px; }
+  .header-right { text-align: right; font-size: 11px; color: #666; line-height: 1.8; }
+  .header-right strong { color: #1a1a2e; font-size: 12px; }
+  .section-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: #888; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
+  .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+  .kpi { background: #f8f9ff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; text-align: center; }
+  .kpi .val { font-size: 24px; font-weight: 800; color: #1a1a2e; font-family: monospace; line-height: 1; }
+  .kpi .val.green { color: #10b981; }
+  .kpi .val.red   { color: #ef4444; }
+  .kpi .lbl { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #888; margin-top: 5px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th { background: #f1f3f9; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #555; padding: 7px 10px; text-align: left; border-bottom: 2px solid #e5e7eb; }
+  td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; font-size: 11px; color: #333; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .counter-section { margin-bottom: 24px; break-inside: avoid; page-break-inside: avoid; }
+  .counter-name { font-size: 13px; font-weight: 800; color: #1a1a2e; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 9px; color: #aaa; display: flex; justify-content: space-between; }
+  @media print {
+    body { padding: 20px; }
+    .no-print { display: none; }
+    .counter-section { page-break-inside: avoid; }
+  }
+  .print-btn { display: block; margin: 0 auto 24px; padding: 10px 32px; background: #1a1a2e; color: #fff; font-size: 13px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; font-family: inherit; }
+  @media print { .print-btn { display: none; } }
+</style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">🖨 Print / Save as PDF</button>
+
+  <div class="header">
+    <div class="header-left">
+      <h1>End of Shift Report</h1>
+      <div class="subtitle">Novus Foods · Plant 1730 · Buena Park, CA</div>
+    </div>
+    <div class="header-right">
+      <div>${dateStr}</div>
+      <div>Printed at ${timeStr}</div>
+      <div><strong>Session:</strong> ${SESSION_ID}</div>
+    </div>
+  </div>
+
+  <div class="section-title">Session Summary</div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="val">${effTotal}</div><div class="lbl">HUs Audited</div></div>
+    <div class="kpi"><div class="val green">${okCount}</div><div class="lbl">OK</div></div>
+    <div class="kpi"><div class="val red">${discCount}</div><div class="lbl">Discrepancies</div></div>
+    <div class="kpi"><div class="val">${binAcc}%</div><div class="lbl">Bin Accuracy</div></div>
+    <div class="kpi"><div class="val">${invAcc}%</div><div class="lbl">Inv. Accuracy</div></div>
+  </div>
+
+  <div class="section-title">Counter Summary</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Counter</th>
+        <th style="text-align:center">Bins</th>
+        <th style="text-align:center">HUs</th>
+        <th style="text-align:center">OK</th>
+        <th style="text-align:center">Disc.</th>
+        <th style="text-align:center">Pallets</th>
+      </tr>
+    </thead>
+    <tbody>${counterRows}</tbody>
+  </table>
+
+  <div class="section-title">Detail by Counter</div>
+  ${detailSections}
+
+  <div class="footer">
+    <span>Novus Ops · Plant 1730 Cycle Count Program</span>
+    <span>Generated ${dateStr} at ${timeStr}</span>
+  </div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(html);
+  w.document.close();
 }
 
 /* ══════════════════════════════════════════════════════
