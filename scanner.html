@@ -1297,6 +1297,7 @@ async function finalizeBin(){
     completedBins.add(currentBin);
     try{localStorage.setItem('novus_done',JSON.stringify({date:_todayStr,bins:[...completedBins]}));}catch{}
     updateDoneCount();renderStrip();stepBin(1);
+    _checkAndCompleteAssignments(); // auto-remove finished assignments
   } else { updateFinalizeBtn(); }
 }
 
@@ -1426,17 +1427,56 @@ function _jumpToAssignment(type, value) {
   }
 }
 
+async function _checkAndCompleteAssignments() {
+  if (!currentAssignments.length) return;
+
+  const toDelete = [];
+
+  for (const a of currentAssignments) {
+    if (a.type === 'aisle') {
+      const zoneKey   = a.value; // e.g. 'WA'
+      const zoneBins  = ALL_BINS[zoneKey] || [];
+      const sapBins   = zoneBins.filter(b => sapByBin[b]);
+      if (!sapBins.length) continue; // no SAP data in this aisle yet
+      const allDone   = sapBins.every(b => completedBins.has(b));
+      if (allDone) toDelete.push(a);
+
+    } else if (a.type === 'product') {
+      const prod      = a.value.toUpperCase();
+      const prodBins  = [...new Set(sapMaster.filter(i => i.product.toUpperCase() === prod).map(i => i.sapBin))];
+      if (!prodBins.length) continue;
+      const allDone   = prodBins.every(b => completedBins.has(b));
+      if (allDone) toDelete.push(a);
+    }
+  }
+
+  if (!toDelete.length) return;
+
+  for (const a of toDelete) {
+    try {
+      await sb.from('assignments').delete().eq('id', a.id);
+      toast(`✅ ${a.description || a.value} complete — assignment cleared`, 'green');
+    } catch (err) {
+      console.warn('[scanner] failed to clear assignment:', err.message);
+    }
+  }
+}
+
 // Realtime subscription to assignments table
 (function _subscribeAssignments() {
   sb.channel('scanner-assignments')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, payload => {
-      // Refetch all assignments on any change
+      const recType = payload.new?.type || payload.old?.type;
+      if (recType === 'counter_report') return; // ignore report records
+
+      // Refetch all assignments on any aisle/product change
       fetchAssignments();
-      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+
+      if (payload.eventType === 'INSERT') {
         toast('📋 New assignment from Control Center!', 'blue');
         if (NovusSettings.get('hapticFeedback') && navigator.vibrate) navigator.vibrate([100, 50, 100]);
       } else if (payload.eventType === 'DELETE') {
-        toast('Assignment cleared', 'blue');
+        // Silently remove — _checkAndCompleteAssignments already toasted
       }
     })
     .subscribe();
