@@ -184,9 +184,10 @@ input,select,textarea{font-family:inherit}
 .aisle-btn.freezer.in-progress{border-color:rgba(34,211,238,.3);background:rgba(34,211,238,.06)}
 .aisle-btn.other-zone{border-color:rgba(167,139,250,.2)}
 .aisle-btn.other-zone:hover{border-color:var(--purple);background:var(--purple-bg)}
-.assignment-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--accent-dim);border:1.5px solid rgba(91,154,255,.3);border-radius:20px;font-size:11px;font-weight:800;color:var(--accent);cursor:pointer;transition:background .15s,border-color .15s,transform .1s;white-space:nowrap}
-.assignment-chip:hover{background:rgba(91,154,255,.18);border-color:var(--accent);transform:translateY(-1px)}
+.assignment-chip{display:inline-flex;align-items:center;gap:8px;padding:12px 18px;background:var(--accent);border:none;border-radius:14px;font-size:13px;font-weight:900;color:#fff;cursor:pointer;transition:filter .15s,transform .1s;white-space:nowrap;box-shadow:0 4px 16px rgba(91,154,255,.35);letter-spacing:-.2px}
+.assignment-chip:hover{filter:brightness(1.12);transform:translateY(-2px)}
 .assignment-chip:active{transform:scale(.95)}
+@keyframes shimmer-bar{0%{background-position:0% 0}100%{background-position:200% 0}}
 .aisle-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .aisle-btn{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:0;text-align:center;font-size:22px;font-weight:900;color:var(--text);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:72px;transition:border-color .15s,background .15s,transform .1s}
 .aisle-btn:hover{border-color:var(--accent);background:var(--accent-dim)}
@@ -320,18 +321,28 @@ input,select,textarea{font-family:inherit}
   </div>
 
   <!-- ASSIGNMENT BANNER -->
-  <div id="assignment-banner" style="display:none;flex-shrink:0;background:linear-gradient(135deg,rgba(91,154,255,.12),rgba(91,154,255,.06));border-bottom:1px solid rgba(91,154,255,.25);padding:10px 16px;animation:screen-in .3s ease">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:14px">📋</span>
-        <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent)">Your Assignment</span>
+  <div id="assignment-banner" style="display:none;flex-shrink:0;animation:screen-in .3s ease">
+    <!-- Pulsing top accent bar -->
+    <div style="height:4px;background:linear-gradient(90deg,var(--accent),var(--green),var(--accent));background-size:200% 100%;animation:shimmer-bar 2s linear infinite"></div>
+    <div style="background:linear-gradient(160deg,rgba(91,154,255,.18) 0%,rgba(91,154,255,.06) 100%);border-bottom:2px solid rgba(91,154,255,.3);padding:14px 16px">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 16px rgba(91,154,255,.5);flex-shrink:0">📋</div>
+          <div>
+            <div style="font-size:13px;font-weight:900;color:var(--accent);letter-spacing:-.2px">YOUR ASSIGNMENT</div>
+            <div id="assignment-by" style="font-size:9px;font-weight:600;color:var(--text-3);margin-top:1px"></div>
+          </div>
+        </div>
+        <div style="background:var(--accent);border-radius:20px;padding:3px 10px;font-size:9px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:1px;animation:pulse 2s infinite">ACTIVE</div>
       </div>
-      <span id="assignment-by" style="font-size:9px;font-weight:600;color:var(--text-3)"></span>
+      <!-- Assignment chips -->
+      <div id="assignment-chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <!-- Submit button -->
+      <button id="submit-report-btn" onclick="submitCountReport()" style="display:none;width:100%;padding:14px;border-radius:14px;background:var(--green);color:#fff;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;border:none;cursor:pointer;box-shadow:0 4px 20px rgba(52,211,153,.35);transition:filter .15s">
+        ✅ Submit Report to Control Center
+      </button>
     </div>
-    <div id="assignment-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-    <button id="submit-report-btn" onclick="submitCountReport()" style="display:none;width:100%;margin-top:10px;padding:12px;border-radius:12px;background:var(--green);color:#fff;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;cursor:pointer;transition:filter .15s">
-      ✅ Submit Report to Control Center
-    </button>
   </div>
 
   <!-- FRESH SHELL -->
@@ -1299,7 +1310,9 @@ async function fetchAssignments() {
       .select('*')
       .order('assigned_at', { ascending: false });
     if (error) throw error;
-    if (data && data.length) _applyAssignments(data);
+    // Filter to only aisle/product assignments — not counter_reports
+    const active = (data || []).filter(a => a.type === 'aisle' || a.type === 'product');
+    if (active.length) _applyAssignments(active);
     else _clearAssignmentBanner();
   } catch (err) {
     console.warn('[scanner] assignments fetch failed:', err.message);
