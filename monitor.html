@@ -429,6 +429,7 @@ tbody tr:hover{background:var(--surface)}
     </div>
     <div class="topbar-divider"></div>
     <div class="freshness none" id="freshness-badge">📋 Connecting…</div>
+    <div id="sap-age-pill" style="display:none;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;transition:background .4s,color .4s,border-color .4s;border:1px solid transparent"></div>
     <div class="live-pill"><div class="live-dot" id="live-dot"></div> Live</div>
     <div class="topbar-right">
       <button class="tb-btn" onclick="enterTVMode()">📺 TV Mode</button>
@@ -591,7 +592,8 @@ const PAGE_SIZE = 50;
 let sapBinData = [];
 let pendingAction = null;
 let baseWorkbook  = null;
-let sapUploadedAt = null; // Timestamp of last SAP upload // Linked Daily_Tasks.xlsx workbook object
+let sapUploadedAt  = null; // Timestamp of last SAP upload
+let _sapWarnedAt25 = false; // Tracks whether 25-min warning has fired // Linked Daily_Tasks.xlsx workbook object
 let hiddenRows    = new Set(); // HU+bin keys hidden via Mixed Bin / Max Volume
 
 /* ══════════════════════════════════════════════════════
@@ -870,7 +872,8 @@ async function _processSAPFile(file) {
       `<strong>Last upload:</strong> ${new Date().toLocaleString()}<br>` +
       `<strong>By:</strong> ${NovusSettings.getUser() || 'Control Center'}<br>` +
       `<strong>File:</strong> ${file.name}`;
-    sapUploadedAt = Date.now();
+    sapUploadedAt  = Date.now();
+    _sapWarnedAt25  = false;
     _hideSAPStaleOverlay();
     toast(`SAP import: ${sapRows.length.toLocaleString()} rows`, 'green');
     setTimeout(_resetUploadZone, 4000);
@@ -2322,8 +2325,49 @@ async function fetchExistingReports() {
 const SAP_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 function _checkSAPFreshness() {
-  if (!sapUploadedAt) return; // No upload yet this session — don't block
-  const age = Date.now() - sapUploadedAt;
+  const pill = document.getElementById('sap-age-pill');
+
+  if (!sapUploadedAt) {
+    if (pill) pill.style.display = 'none';
+    return;
+  }
+
+  const age     = Date.now() - sapUploadedAt;
+  const mins    = Math.floor(age / 60000);
+  const secs    = Math.floor((age % 60000) / 1000);
+  const label   = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  // Update topbar age pill
+  if (pill) {
+    pill.style.display = 'block';
+    if (age >= SAP_MAX_AGE_MS) {
+      // 30+ min — red, expired
+      pill.textContent    = `⛔ SAP ${label} old`;
+      pill.style.background  = 'var(--red-bg)';
+      pill.style.color       = 'var(--red)';
+      pill.style.borderColor = 'var(--red-border)';
+    } else if (age >= SAP_MAX_AGE_MS * 0.833) {
+      // 25+ min — amber warning
+      pill.textContent    = `⚠ SAP ${label} old`;
+      pill.style.background  = 'var(--amber-bg)';
+      pill.style.color       = 'var(--amber)';
+      pill.style.borderColor = 'var(--amber-border)';
+    } else {
+      // Under 25 min — green, fresh
+      pill.textContent    = `✓ SAP ${label} old`;
+      pill.style.background  = 'var(--green-bg)';
+      pill.style.color       = 'var(--green)';
+      pill.style.borderColor = 'var(--green-border)';
+    }
+  }
+
+  // 25-minute warning toast (fires once)
+  if (age >= SAP_MAX_AGE_MS * 0.833 && age < SAP_MAX_AGE_MS * 0.833 + 61000 && !_sapWarnedAt25) {
+    _sapWarnedAt25 = true;
+    toast('⚠ SAP data expires in 5 minutes — prepare a fresh export', 'amber');
+  }
+
+  // 30-minute block
   if (age >= SAP_MAX_AGE_MS) {
     _showSAPStaleOverlay(age);
   }
@@ -2362,7 +2406,7 @@ function _hideSAPStaleOverlay() {
 })();
 
 // Check freshness every 60 seconds
-setInterval(_checkSAPFreshness, 60 * 1000);
+setInterval(_checkSAPFreshness, 10 * 1000); // Every 10s for live countdown
 
 /* ══════════════════════════════════════════════════════
    SAP COPY
