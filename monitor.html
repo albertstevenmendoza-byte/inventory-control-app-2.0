@@ -455,6 +455,12 @@ tbody tr:hover{background:var(--surface)}
         <button class="rail-btn primary" onclick="pushAssignments()">Push to Team</button>
         <button class="rail-btn ghost" onclick="clearAssignments()">Clear</button>
       </div>
+      <div style="margin-top:10px">
+        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-3);margin-bottom:6px">Active Requests</div>
+        <div id="active-assignments-list" style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:10px;color:var(--text-3);font-style:italic">No active requests</div>
+        </div>
+      </div>
     </div>
     <div class="rail-section">
       <div class="rail-title">Reconciliation</div>
@@ -602,6 +608,7 @@ let hiddenRows    = new Set(); // HU+bin keys hidden via Mixed Bin / Max Volume
 
 NovusLoader.start();
 fetchFullDashboard();
+fetchActiveAssignments();
 initAislePicker();
 _subscribeRealtime();
 setInterval(pollLightweight, 30000); // fallback — Realtime handles instant updates
@@ -1282,6 +1289,7 @@ async function pushAssignments() {
     if (error) throw error;
     const label = list.map(a => a.description).join(', ');
     toast(`Pushed: ${label}`, 'green');
+    fetchActiveAssignments();
     assignAisles.clear();
     document.querySelectorAll('.aisle-pick').forEach(b => b.classList.remove('on'));
     if (document.getElementById('prod-assign')) document.getElementById('prod-assign').value = '';
@@ -1295,6 +1303,7 @@ async function clearAssignments() {
       .delete()
       .in('type', ['aisle', 'product']);
     toast('Assignments cleared', 'blue');
+    fetchActiveAssignments();
   } catch (err) { toast('Clear failed: ' + err.message, 'red'); }
 }
 
@@ -2172,6 +2181,60 @@ function printEndOfShift() {
   w.document.write(html);
   w.document.close();
 }
+
+/* ══════════════════════════════════════════════════════
+   ACTIVE ASSIGNMENTS SUMMARY
+══════════════════════════════════════════════════════ */
+async function fetchActiveAssignments() {
+  try {
+    const { data, error } = await sb
+      .from('assignments')
+      .select('*')
+      .in('type', ['aisle', 'product'])
+      .order('assigned_at', { ascending: true });
+    if (error) throw error;
+    _renderActiveAssignments(data || []);
+  } catch (err) {
+    console.warn('[monitor] fetchActiveAssignments failed:', err.message);
+  }
+}
+
+function _renderActiveAssignments(data) {
+  const list = document.getElementById('active-assignments-list');
+  if (!list) return;
+
+  if (!data.length) {
+    list.innerHTML = '<div style="font-size:10px;color:var(--text-3);font-style:italic">No active requests</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(a => {
+    const icon  = a.type === 'aisle' ? '🗺' : '🔍';
+    const label = a.description || a.value;
+    const time  = new Date(a.assigned_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+    const by    = a.assigned_by || 'Control Center';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);animation:fade-in .2s ease">
+      <span style="font-size:13px;flex-shrink:0">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(label)}</div>
+        <div style="font-size:9px;color:var(--text-3)">${escHtml(by)} · ${time}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Subscribe to assignments table so the summary updates live
+(function _subscribeActiveAssignments() {
+  sb.channel('monitor-active-assignments')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, payload => {
+      // Refresh the active list on any change
+      if (['aisle', 'product'].includes(payload.new?.type) ||
+          ['aisle', 'product'].includes(payload.old?.type)) {
+        fetchActiveAssignments();
+      }
+    })
+    .subscribe();
+})();
 
 /* ══════════════════════════════════════════════════════
    COUNTER REPORTS — received from scanner
