@@ -515,7 +515,7 @@ tbody tr:hover{background:var(--surface)}
       <button class="view-tab active" id="tab-audit"    onclick="showView('audit')">📋 Audit</button>
       <button class="view-tab"        id="tab-aisles"   onclick="showView('aisles')">🗺 Aisles</button>
       <button class="view-tab"        id="tab-safety"   onclick="showView('safety')">🦺 Safety</button>
-      <button class="view-tab"        id="tab-training" onclick="showView('training')">📚 SOPs</button>
+      <button class="view-tab"        id="tab-training" onclick="showView('training')">📋 Requests</button>
     </div>
 
     <!-- AUDIT VIEW -->
@@ -562,10 +562,30 @@ tbody tr:hover{background:var(--surface)}
       <div class="safety-list" id="safety-list-container"></div>
     </div>
 
-    <!-- TRAINING VIEW -->
+    <!-- CYCLE COUNT REQUESTS VIEW -->
     <div class="view" id="view-training">
-      <div class="view-header"><h2>📚 Training &amp; SOP Library</h2><button onclick="openTrainingEditor()" style="padding:8px 18px;border-radius:var(--r-md);background:var(--teal);color:#fff;font-size:11px;font-weight:800;border:none;cursor:pointer;text-transform:uppercase;letter-spacing:.5px">+ New SOP</button></div>
-      <div class="training-list" id="training-list-container"></div>
+      <div class="view-header" style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0">
+        <div>
+          <h2 style="font-size:16px;font-weight:900;color:var(--text)">📋 Cycle Count Requests</h2>
+          <div style="font-size:10px;color:var(--text-3);margin-top:3px" id="requests-meta">Today's session</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="fetchCycleCountRequests()" style="padding:8px 16px;border-radius:var(--r-sm);background:var(--surface-2);color:var(--text-2);font-size:10px;font-weight:800;border:1px solid var(--border-2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'" onmouseout="this.style.borderColor='var(--border-2)';this.style.color='var(--text-2)'">↻ Refresh</button>
+          <button onclick="clearAssignments()" style="padding:8px 16px;border-radius:var(--r-sm);background:var(--red-bg);color:var(--red);font-size:10px;font-weight:800;border:1px solid var(--red-border);cursor:pointer;font-family:inherit">🗑 Clear All</button>
+        </div>
+      </div>
+
+      <!-- Summary strip -->
+      <div id="requests-summary-strip" style="display:flex;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap"></div>
+
+      <!-- Request cards -->
+      <div id="requests-list" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-content:start">
+        <div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--text-3)">
+          <div style="font-size:40px;margin-bottom:10px">📋</div>
+          <p style="font-weight:700">No requests yet</p>
+          <p style="font-size:11px;margin-top:4px">Push assignments from the Aisle Assignments panel</p>
+        </div>
+      </div>
     </div>
   </main>
 </div>
@@ -800,7 +820,7 @@ function showView(name) {
   });
   document.getElementById('view-' + name)?.classList.add('active');
   document.getElementById('tab-'  + name)?.classList.add('active');
-  if (name === 'training') loadTrainingData();
+  if (name === 'training') fetchCycleCountRequests();
   if (name === 'safety')   renderSafetyView();
   if (name === 'aisles')   renderAisleView();
 }
@@ -1335,6 +1355,7 @@ async function pushAssignments() {
     const label = list.map(a => a.description).join(', ');
     toast(`${urgentFlag ? '🚨 URGENT — ' : ''}Pushed by ${pushedBy}: ${label}`, urgentFlag ? 'red' : 'green');
     fetchActiveAssignments();
+    fetchCycleCountRequests();
     // Reset urgent flag after push
     urgentFlag = false; toggleUrgent(); toggleUrgent();
     assignAisles.clear();
@@ -1351,6 +1372,7 @@ async function clearAssignments() {
       .in('type', ['aisle', 'product']);
     toast('Assignments cleared', 'blue');
     fetchActiveAssignments();
+    fetchCycleCountRequests();
   } catch (err) { toast('Clear failed: ' + err.message, 'red'); }
 }
 
@@ -2540,6 +2562,121 @@ async function fetchExistingReports() {
 }
 
 // counter_report events are handled in _subscribeActiveAssignments below
+
+/* ══════════════════════════════════════════════════════
+   CYCLE COUNT REQUESTS TAB
+══════════════════════════════════════════════════════ */
+async function fetchCycleCountRequests() {
+  const list    = document.getElementById('requests-list');
+  const strip   = document.getElementById('requests-summary-strip');
+  const meta    = document.getElementById('requests-meta');
+  if (!list) return;
+
+  list.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-3);font-size:11px">Loading…</div>';
+
+  try {
+    const { data: assignments, error } = await sb
+      .from('assignments')
+      .select('*')
+      .in('type', ['aisle', 'product'])
+      .order('urgent',      { ascending: false })
+      .order('assigned_at', { ascending: true });
+
+    if (error) throw error;
+
+    const rows = assignments || [];
+
+    // Summary strip
+    const total     = rows.length;
+    const urgent    = rows.filter(r => r.urgent).length;
+    const claimed   = rows.filter(r => r.claimed_by).length;
+    const unclaimed = total - claimed;
+
+    if (meta) {
+      const t = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+      meta.textContent = `${total} request${total !== 1 ? 's' : ''} · Updated ${t}`;
+    }
+
+    if (strip) {
+      strip.innerHTML = [
+        { val: total,     lbl: 'Total',      color: 'var(--accent)'  },
+        { val: urgent,    lbl: 'Urgent',     color: 'var(--red)'     },
+        { val: claimed,   lbl: 'In Progress',color: 'var(--teal)'    },
+        { val: unclaimed, lbl: 'Unclaimed',  color: 'var(--amber)'   },
+      ].map(k => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:40px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:${k.color}">${k.val}</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-3)">${k.lbl}</span>
+        </div>`).join('');
+    }
+
+    if (!rows.length) {
+      list.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-3)">
+          <div style="font-size:48px;margin-bottom:14px;opacity:.3">📋</div>
+          <p style="font-size:15px;font-weight:800;color:var(--text-2)">No requests yet</p>
+          <p style="font-size:12px;margin-top:6px">Push assignments from the Aisle Assignments panel</p>
+        </div>`;
+      return;
+    }
+
+    // Render cards
+    list.innerHTML = rows.map(a => {
+      const icon      = a.type === 'aisle' ? '🗺' : '🔍';
+      const label     = a.description || a.value;
+      const time      = new Date(a.assigned_at).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+      const by        = a.assigned_by || 'Control Center';
+      const claimed   = a.claimed_by;
+      const isUrgent  = a.urgent;
+
+      const statusBg    = claimed ? 'var(--teal-dim)'   : 'var(--amber-bg)';
+      const statusBorder= claimed ? 'var(--teal-border)': 'var(--amber-border)';
+      const statusColor = claimed ? 'var(--teal)'       : 'var(--amber)';
+      const statusLabel = claimed ? `👤 ${escHtml(claimed)}` : 'Unclaimed';
+      const statusIcon  = claimed ? '🟢' : '🟡';
+
+      const cardBorder  = isUrgent ? 'var(--red-border)' : claimed ? 'var(--teal-border)' : 'var(--border)';
+      const cardBg      = isUrgent ? 'rgba(239,68,68,.04)' : 'var(--surface)';
+
+      return `
+        <div onclick="openAssignmentSummary('${escHtml(a.type)}','${escHtml(a.value)}','${escHtml(label)}')"
+             style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:var(--r-lg);padding:18px;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;overflow:hidden;animation:fade-in .2s ease"
+             onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 32px rgba(0,0,0,.4)'"
+             onmouseout="this.style.transform='';this.style.boxShadow=''">
+
+          ${isUrgent ? `
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--red),rgba(239,68,68,.3))"></div>
+            <div style="position:absolute;top:10px;right:10px;background:var(--red);color:#fff;font-size:8px;font-weight:900;padding:3px 8px;border-radius:20px;letter-spacing:.5px">🚨 URGENT</div>
+          ` : ''}
+
+          <!-- Icon + label -->
+          <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+            <div style="width:44px;height:44px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:900;color:var(--text);line-height:1.2;margin-bottom:4px">${escHtml(label)}</div>
+              <div style="font-size:10px;color:var(--text-3)">Pushed by <strong style="color:var(--text-2)">${escHtml(by)}</strong> at ${time}</div>
+            </div>
+          </div>
+
+          <!-- Status badge -->
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${statusBg};border:1px solid ${statusBorder};border-radius:var(--r-sm);margin-bottom:12px">
+            <span style="font-size:13px">${statusIcon}</span>
+            <span style="font-size:11px;font-weight:700;color:${statusColor}">${statusLabel}</span>
+            ${claimed ? '<span style="margin-left:auto;font-size:9px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px">In Progress</span>' : '<span style="margin-left:auto;font-size:9px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.5px">Awaiting Counter</span>'}
+          </div>
+
+          <!-- Footer -->
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-3)">${a.type === 'aisle' ? 'Aisle Count' : 'Product Count'}</span>
+            <span style="font-size:10px;font-weight:700;color:var(--teal)">View Summary →</span>
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (err) {
+    list.innerHTML = `<div style="grid-column:1/-1;padding:24px;color:var(--red);font-size:12px">Failed to load: ${escHtml(err.message)}</div>`;
+  }
+}
 
 /* ══════════════════════════════════════════════════════
    ASSIGNMENT SUMMARY MODAL
