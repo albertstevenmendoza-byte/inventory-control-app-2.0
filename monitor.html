@@ -2307,7 +2307,6 @@ async function fetchActiveAssignments() {
       .from('assignments')
       .select('id, type, value, description, assigned_by, assigned_at, claimed_by, urgent')
       .in('type', ['aisle', 'product'])
-      .order('urgent', { ascending: false }) // urgent items float to top
       .order('assigned_at', { ascending: true });
     if (error) throw error;
     _renderActiveAssignments(data || []);
@@ -2579,7 +2578,6 @@ async function fetchCycleCountRequests() {
       .from('assignments')
       .select('*')
       .in('type', ['aisle', 'product'])
-      .order('urgent',      { ascending: false })
       .order('assigned_at', { ascending: true });
 
     if (error) throw error;
@@ -2639,7 +2637,10 @@ async function fetchCycleCountRequests() {
       const cardBg      = isUrgent ? 'rgba(239,68,68,.04)' : 'var(--surface)';
 
       return `
-        <div onclick="openAssignmentSummary('${escHtml(a.type)}','${escHtml(a.value)}','${escHtml(label)}')"
+        <div class="request-card"
+             data-type="${a.type}"
+             data-value="${a.value}"
+             data-label="${label.replace(/"/g,'&quot;')}"
              style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:var(--r-lg);padding:18px;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;overflow:hidden;animation:fade-in .2s ease"
              onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 32px rgba(0,0,0,.4)'"
              onmouseout="this.style.transform='';this.style.boxShadow=''">
@@ -2677,6 +2678,16 @@ async function fetchCycleCountRequests() {
     list.innerHTML = `<div style="grid-column:1/-1;padding:24px;color:var(--red);font-size:12px">Failed to load: ${escHtml(err.message)}</div>`;
   }
 }
+
+// Event delegation for request cards
+document.addEventListener('click', e => {
+  const card = e.target.closest('.request-card');
+  if (!card) return;
+  const type  = card.dataset.type;
+  const value = card.dataset.value;
+  const label = card.dataset.label;
+  if (type && value) openAssignmentSummary(type, value, label);
+});
 
 /* ══════════════════════════════════════════════════════
    ASSIGNMENT SUMMARY MODAL
