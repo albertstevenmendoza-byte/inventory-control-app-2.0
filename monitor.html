@@ -2560,12 +2560,13 @@ async function openAssignmentSummary(type, value, label) {
       // value is like 'WA' — match bins that start with that prefix (e.g. WA01A, WA02B)
       query = query.like('scanned_bin', `${value}%`);
     } else {
-      // product assignment — filter by material number
-      query = query.eq('material', value);
+      // Product — SAP may store material with leading zeros (e.g. 0000003309009 vs 3309009)
+      // Use ilike with wildcard to handle both formats
+      query = query.or(`material.eq.${value},material.ilike.%${value}`);
     }
 
+    // Include pallet counts so fresh product counting shows up too
     const { data, error } = await query
-      .neq('type', 'pallet_count')
       .order('scanned_bin', { ascending: true });
 
     if (error) throw error;
@@ -2579,14 +2580,6 @@ async function openAssignmentSummary(type, value, label) {
       return;
     }
 
-    // Summary stats
-    const total    = data.length;
-    const ok       = data.filter(r => r.type === 'ok').length;
-    const disc     = total - ok;
-    const totalExp = data.reduce((s, r) => s + (Number(r.expected_qty) || 0), 0);
-    const totalScan= data.reduce((s, r) => s + (Number(r.scanned_qty)  || 0), 0);
-    const variance = totalScan - totalExp;
-
     // Who counted and how many
     const byCounter = {};
     data.forEach(r => {
@@ -2599,25 +2592,38 @@ async function openAssignmentSummary(type, value, label) {
       .join(' ');
 
     const TYPE_STYLES = {
-      ok:           { bg:'var(--green-bg)',  color:'var(--green)',  label:'OK'         },
-      adj:          { bg:'var(--amber-bg)',  color:'var(--amber)',  label:'Adjusted'   },
-      move:         { bg:'var(--purple-bg)', color:'var(--purple)', label:'Moved'      },
-      move_adj:     { bg:'var(--surface-3)', color:'var(--purple)', label:'Moved+Adj'  },
-      missing_temp: { bg:'var(--red-bg)',    color:'var(--red)',    label:'Missing'    },
-      missing:      { bg:'var(--red-bg)',    color:'var(--red)',    label:'Missing'    },
-      unexpected:   { bg:'var(--cyan-bg)',   color:'var(--cyan)',   label:'Unexpected' },
+      ok:            { bg:'var(--green-bg)',  color:'var(--green)',  label:'OK'           },
+      adj:           { bg:'var(--amber-bg)',  color:'var(--amber)',  label:'Adjusted'     },
+      move:          { bg:'var(--purple-bg)', color:'var(--purple)', label:'Moved'        },
+      move_adj:      { bg:'var(--surface-3)', color:'var(--purple)', label:'Moved+Adj'   },
+      missing_temp:  { bg:'var(--red-bg)',    color:'var(--red)',    label:'Missing'      },
+      missing:       { bg:'var(--red-bg)',    color:'var(--red)',    label:'Missing'      },
+      unexpected:    { bg:'var(--cyan-bg)',   color:'var(--cyan)',   label:'Unexpected'   },
+      pallet_count:  { bg:'var(--fresh-bg)',  color:'var(--fresh)',  label:'Pallet Count' },
     };
+
+    // Separate HU rows from pallet counts for stats
+    const huRows      = data.filter(r => r.type !== 'pallet_count');
+    const palletRows  = data.filter(r => r.type === 'pallet_count');
+    const total       = huRows.length;
+    const ok          = huRows.filter(r => r.type === 'ok').length;
+    const disc        = total - ok;
+    const totalExp    = huRows.reduce((s, r) => s + (Number(r.expected_qty) || 0), 0);
+    const totalScan   = huRows.reduce((s, r) => s + (Number(r.scanned_qty)  || 0), 0);
+    const variance    = totalScan - totalExp;
+    const totalPallets= palletRows.reduce((s, r) => s + (Number(r.scanned_qty) || 0), 0);
 
     const summaryHTML = `
       <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface-2)">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${counterList}</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <div style="display:grid;grid-template-columns:repeat(${palletRows.length ? 5 : 4},1fr);gap:10px">
           ${[
             { val: total,    lbl: 'HUs Audited', color: 'var(--accent)'  },
             { val: ok,       lbl: 'OK',           color: 'var(--green)'  },
             { val: disc,     lbl: 'Discrepancies',color: disc > 0 ? 'var(--red)' : 'var(--green)' },
             { val: (variance >= 0 ? '+' : '') + variance.toLocaleString(),
                              lbl: 'Qty Variance', color: variance === 0 ? 'var(--green)' : 'var(--amber)' },
+            ...(palletRows.length ? [{ val: totalPallets, lbl: 'Pallets Found', color: 'var(--fresh)' }] : []),
           ].map(k => `
             <div style="text-align:center;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)">
               <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${k.color}">${k.val}</div>
