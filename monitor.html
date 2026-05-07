@@ -368,30 +368,22 @@ tbody tr:hover{background:var(--surface)}
   </div>
 </div>
 
-<!-- SAP STALE OVERLAY -->
-<div id="sap-stale-overlay" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(8,11,16,.97);backdrop-filter:blur(12px);flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
-  <div style="font-size:48px;margin-bottom:16px">⏰</div>
-  <h2 style="font-size:22px;font-weight:900;color:var(--text);margin-bottom:8px">SAP Data Expired</h2>
-  <p style="font-size:13px;color:var(--text-2);margin-bottom:6px">The SAP export is more than 30 minutes old.</p>
-  <p style="font-size:13px;color:var(--text-2);margin-bottom:32px">Upload a fresh export to continue using the Control Center.</p>
-  <label id="sap-stale-upload-zone" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 48px;border:2px dashed rgba(0,229,255,.3);border-radius:20px;cursor:pointer;background:var(--accent-dim);transition:border-color .2s,background .2s;max-width:360px;width:100%">
-    <input type="file" accept=".xlsx,.xls,.csv" id="sap-stale-file-input" hidden>
-    <span id="sap-stale-icon" style="font-size:32px">📂</span>
-    <span id="sap-stale-label" style="font-size:13px;font-weight:700;color:var(--accent)">Upload SAP Export (.xlsx)</span>
-  </label>
-  <div id="sap-stale-meta" style="font-size:10px;color:var(--text-3);margin-top:16px;line-height:1.8"></div>
-  <div id="sap-stale-countdown" style="font-size:11px;font-weight:700;color:var(--red);margin-top:20px;font-family:'JetBrains Mono',monospace"></div>
-</div>
-
-<!-- CYCLE COUNT REPORT DETAIL MODAL -->
-<div class="modal-overlay" id="report-detail-modal">
-  <div class="modal-box" style="max-width:720px">
-    <div class="modal-header">
-      <h3 id="report-modal-title">Count Report</h3>
-      <button class="modal-close" onclick="document.getElementById('report-detail-modal').classList.remove('open')">✕</button>
+<!-- SAP STALE BANNER (non-blocking) -->
+<div id="sap-stale-overlay" style="display:none;position:fixed;bottom:20px;right:20px;z-index:3000;background:var(--surface);border:1px solid var(--amber-border);border-radius:var(--r-lg);padding:14px 18px;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:320px;animation:modal-rise .3s ease">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+    <span style="font-size:20px;flex-shrink:0">⏰</span>
+    <div style="flex:1">
+      <div style="font-size:12px;font-weight:800;color:var(--amber)">SAP Data Expired</div>
+      <div id="sap-stale-countdown" style="font-size:10px;color:var(--text-3);margin-top:1px;font-family:'JetBrains Mono',monospace"></div>
     </div>
-    <div class="modal-body" id="report-modal-body" style="padding:0;gap:0;overflow-y:auto;max-height:70vh"></div>
+    <button onclick="_hideSAPStaleOverlay()" style="background:none;border:none;color:var(--text-3);font-size:14px;cursor:pointer;flex-shrink:0;padding:2px">✕</button>
   </div>
+  <label id="sap-stale-upload-zone" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px dashed var(--amber-border);border-radius:var(--r-sm);cursor:pointer;background:var(--amber-bg);transition:border-color .2s,background .2s;width:100%">
+    <input type="file" accept=".xlsx,.xls,.csv" id="sap-stale-file-input" hidden>
+    <span id="sap-stale-icon" style="font-size:16px">📂</span>
+    <span id="sap-stale-label" style="font-size:11px;font-weight:700;color:var(--amber)">Upload fresh SAP export</span>
+  </label>
+  <div id="sap-stale-meta" style="font-size:9px;color:var(--text-3);margin-top:6px;line-height:1.6"></div>
 </div>
 
 <!-- TV OVERLAY -->
@@ -1324,10 +1316,22 @@ async function pushAssignments() {
   NovusSettings.set('userName', pushedBy);
 
   try {
-    const { error } = await sb.from('assignments').insert(
-      list.map(a => ({ ...a, assigned_by: pushedBy, urgent: urgentFlag }))
-    );
-    if (error) throw error;
+    // Try insert with urgent flag; fall back without it if column doesn't exist yet
+    let insertError;
+    const rowsWithUrgent = list.map(a => ({ ...a, assigned_by: pushedBy, urgent: urgentFlag }));
+    const { error: err1 } = await sb.from('assignments').insert(rowsWithUrgent);
+    if (err1) {
+      if (err1.message?.includes('urgent') || err1.code === '42703') {
+        // Column doesn't exist — insert without it
+        const rowsBasic = list.map(a => ({ ...a, assigned_by: pushedBy }));
+        const { error: err2 } = await sb.from('assignments').insert(rowsBasic);
+        insertError = err2;
+        if (!err2) toast('Note: Run SQL migration to enable urgent flag', 'amber');
+      } else {
+        insertError = err1;
+      }
+    }
+    if (insertError) throw insertError;
     const label = list.map(a => a.description).join(', ');
     toast(`${urgentFlag ? '🚨 URGENT — ' : ''}Pushed by ${pushedBy}: ${label}`, urgentFlag ? 'red' : 'green');
     fetchActiveAssignments();
@@ -2553,10 +2557,10 @@ async function openAssignmentSummary(type, value, label) {
     let query = sb.from('cycle_counts').select('*').eq('session_id', SESSION_ID);
 
     if (type === 'aisle') {
-      // value is like 'WA' — filter by aisle letter (second char)
-      query = query.eq('aisle', value[1]);
+      // value is like 'WA' — match bins that start with that prefix (e.g. WA01A, WA02B)
+      query = query.like('scanned_bin', `${value}%`);
     } else {
-      // product assignment — filter by material
+      // product assignment — filter by material number
       query = query.eq('material', value);
     }
 
@@ -2717,10 +2721,10 @@ function _checkSAPFreshness() {
 
 function _showSAPStaleOverlay(ageMs) {
   const overlay = document.getElementById('sap-stale-overlay');
-  overlay.style.display = 'flex';
+  overlay.style.display = 'block';
   const mins = Math.floor(ageMs / 60000);
   document.getElementById('sap-stale-countdown').textContent =
-    `Data is ${mins} minute${mins !== 1 ? 's' : ''} old — upload required to continue`;
+    `Data is ${mins} minute${mins !== 1 ? 's' : ''} old`;
 }
 
 function _hideSAPStaleOverlay() {
