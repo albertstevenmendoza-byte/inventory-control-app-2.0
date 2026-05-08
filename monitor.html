@@ -386,6 +386,17 @@ tbody tr:hover{background:var(--surface)}
   <div id="sap-stale-meta" style="font-size:9px;color:var(--text-3);margin-top:6px;line-height:1.6"></div>
 </div>
 
+<!-- CYCLE COUNT REPORT DETAIL MODAL -->
+<div class="modal-overlay" id="report-detail-modal">
+  <div class="modal-box" style="max-width:720px">
+    <div class="modal-header">
+      <h3 id="report-modal-title">Count Report</h3>
+      <button class="modal-close" onclick="document.getElementById('report-detail-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" id="report-modal-body" style="padding:0;gap:0;overflow-y:auto;max-height:65vh;display:flex;flex-direction:column"></div>
+  </div>
+</div>
+
 <!-- TV OVERLAY -->
 <div class="tv-overlay" id="tv-overlay">
   <button class="tv-exit-btn" onclick="exitTVMode()">✕ Exit TV Mode</button>
