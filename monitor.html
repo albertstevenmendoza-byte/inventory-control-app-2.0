@@ -715,6 +715,35 @@ function _mapCCRow(r) {
    FETCH — FULL DASHBOARD
    Primary data loader. Fetches all sources in parallel.
 ══════════════════════════════════════════════════════ */
+/**
+ * _deduplicateReport — collapse multiple records for the same HU
+ * into a single row, keeping the most-resolved status.
+ * Called by both fetchFullDashboard and pollLightweight so the table
+ * is always consistent regardless of which fetch path runs.
+ *
+ * Priority: ok(7) > move(6) > move_adj(5) > adj(4) >
+ *           unexpected(3) > missing_temp(2) > missing(1) > pallet_count(0)
+ */
+function _deduplicateReport(rows) {
+  const TYPE_PRIORITY = {
+    ok: 7, move: 6, move_adj: 5, adj: 4,
+    unexpected: 3, missing_temp: 2, missing: 1, pallet_count: 0,
+  };
+  const huBest  = new Map();
+  const noHURows = [];
+  rows.forEach(row => {
+    const hu = row.hu;
+    if (!hu || hu === 'UNKNOWN' || hu === 'EMPTY' || hu === '0') {
+      noHURows.push(row); return;
+    }
+    const prev = huBest.get(hu);
+    const curP  = TYPE_PRIORITY[row.type]  ?? 0;
+    const prevP = TYPE_PRIORITY[prev?.type] ?? -1;
+    if (!prev || curP > prevP) huBest.set(hu, row);
+  });
+  return [...huBest.values(), ...noHURows];
+}
+
 async function fetchFullDashboard() {
   const badge = document.getElementById('freshness-badge');
   badge.className = 'freshness none';
@@ -740,33 +769,7 @@ async function fetchFullDashboard() {
     report = ccData.map(_mapCCRow);
 
     // ── Deduplicate by HU ──────────────────────────────────────────────
-    // When a missing_temp and an unexpected share the same HU they represent
-    // the same physical item (one is moved). After reconciliation both become
-    // 'move'. Either way, only ONE row per HU should appear in the table.
-    //
-    // Priority (most resolved wins): ok > move > move_adj > adj >
-    //                                unexpected > missing_temp > missing
-    const TYPE_PRIORITY = {
-      ok: 7, move: 6, move_adj: 5, adj: 4,
-      unexpected: 3, missing_temp: 2, missing: 1, pallet_count: 0,
-    };
-
-    const huBest = new Map(); // HU → highest-priority row
-    const noHURows = [];      // rows with no trackable HU kept as-is
-
-    report.forEach(row => {
-      const hu = row.hu;
-      if (!hu || hu === 'UNKNOWN' || hu === 'EMPTY' || hu === '0') {
-        noHURows.push(row);
-        return;
-      }
-      const prev = huBest.get(hu);
-      const curP  = TYPE_PRIORITY[row.type]  ?? 0;
-      const prevP = TYPE_PRIORITY[prev?.type] ?? -1;
-      if (!prev || curP > prevP) huBest.set(hu, row);
-    });
-
-    report = [...huBest.values(), ...noHURows];
+    report = _deduplicateReport(report);
     // ───────────────────────────────────────────────────────────────────
 
     /* ── 2. SAP meta (freshness badge + upload info) ── */
@@ -841,7 +844,7 @@ async function pollLightweight() {
       if (!data || data.length < CHUNK) break;
       from += CHUNK;
     }
-    report = ccData.map(_mapCCRow);
+    report = _deduplicateReport(ccData.map(_mapCCRow));
     updateMetrics(); renderPills(); renderTable();
     if (document.getElementById('view-safety').classList.contains('active')) {
       await _fetchSafetySummary();
