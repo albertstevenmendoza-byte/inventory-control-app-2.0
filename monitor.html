@@ -2137,27 +2137,48 @@ async function _executeConfirm() {
    PURGE OLD DATA — one-click, fixed 90-day cutoff
 ══════════════════════════════════════════════════════ */
 async function purgeOldData() {
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - 90);
-  const cutoff = cutoffDate.toISOString();
-  const label  = cutoffDate.toLocaleDateString();
+  // Two-step confirmation — this wipes everything
+  if (!confirm('⚠ PURGE ALL DATA
 
-  if (!confirm(`Delete all cycle count and SAP records older than ${label} (90 days)?
+This will permanently delete ALL cycle count records and SAP data from Supabase, including today's session.
 
-This cannot be undone.`)) return;
+This cannot be undone. Continue?')) return;
+  if (!confirm('Are you absolutely sure? All count data will be lost.')) return;
 
   NovusLoader.start();
   try {
-    const [ccRes, sapRes] = await Promise.all([
-      sb.from('cycle_counts').delete().lt('scanned_at',  cutoff),
-      sb.from('sap_data').delete().lt('uploaded_at', cutoff),
+    // Supabase requires a filter for DELETE — use gte('scanned_at', epoch) to match ALL rows
+    const EPOCH = '2000-01-01T00:00:00.000Z';
+
+    const results = await Promise.allSettled([
+      sb.from('cycle_counts').delete().gte('scanned_at',  EPOCH),
+      sb.from('sap_data').delete().gte('uploaded_at', EPOCH),
+      sb.from('assignments').delete().in('type', ['aisle', 'product', 'counter_report']),
     ]);
-    if (ccRes.error)  throw ccRes.error;
-    if (sapRes.error) throw sapRes.error;
-    toast('Old data purged ✓', 'green');
+
+    const errors = results
+      .filter(r => r.status === 'rejected' || r.value?.error)
+      .map(r => r.reason?.message || r.value?.error?.message)
+      .filter(Boolean);
+
+    if (errors.length) {
+      toast('Purge partial — some tables may not have cleared: ' + errors.join(', '), 'amber');
+    } else {
+      toast('All data purged ✓ — Supabase is now empty', 'green');
+    }
+
+    // Reset all local state
+    report        = [];
+    sapUploadedAt = null;
+    _sapWarnedAt25 = false;
+    _hideSAPStaleOverlay();
     fetchFullDashboard();
+    fetchTrendData();
+    fetchActiveAssignments();
+
   } catch (err) {
     toast('Purge failed: ' + err.message, 'red');
+    console.error('[purge]', err);
   } finally {
     NovusLoader.done();
   }
