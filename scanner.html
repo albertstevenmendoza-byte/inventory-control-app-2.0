@@ -1473,8 +1473,16 @@ function selectZone(zoneKey) {
 }
 function navigateToBin(bin) {
   if(!bin) return;
-  currentBin=bin.toUpperCase();
-  binIdx=aisleBins.indexOf(currentBin); if(binIdx<0) binIdx=0;
+  // Normalise: uppercase + trim so bin list casing never breaks navigation
+  currentBin = bin.trim().toUpperCase();
+  // Try exact match first, then case-insensitive scan
+  let found = aisleBins.indexOf(currentBin);
+  if (found < 0) {
+    found = aisleBins.findIndex(b => b.trim().toUpperCase() === currentBin);
+  }
+  // Only update binIdx when we genuinely found the bin.
+  // If not found, keep whatever binIdx stepBin() already set — never reset to 0.
+  if (found >= 0) binIdx = found;
   let expected=sapByBin[currentBin]||[];
   if(targetProduct) expected=expected.filter(i=>i.product.toUpperCase()===targetProduct);
   currentItems=expected.map(i=>({hu:i.hu,product:i.product,desc:i.desc,batch:i.batch,sapBin:i.sapBin,sapQty:i.sapQty,unit:i.unit,sled:i.sled,scannedQty:0,status:'pending',isExtra:false,note:''}));
