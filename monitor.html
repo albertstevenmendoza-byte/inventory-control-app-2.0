@@ -2138,11 +2138,7 @@ async function _executeConfirm() {
 ══════════════════════════════════════════════════════ */
 async function purgeOldData() {
   // Two-step confirmation — this wipes everything
-  if (!confirm('⚠ PURGE ALL DATA
-
-This will permanently delete ALL cycle count records and SAP data from Supabase, including today's session.
-
-This cannot be undone. Continue?')) return;
+  if (!confirm('⚠ PURGE ALL DATA\n\nThis will permanently delete ALL cycle count records and SAP data from Supabase, including today\'s session.\n\nThis cannot be undone. Continue?')) return;
   if (!confirm('Are you absolutely sure? All count data will be lost.')) return;
 
   NovusLoader.start();
