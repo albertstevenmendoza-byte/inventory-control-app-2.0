@@ -602,6 +602,7 @@ document.getElementById('fresh-sku-select').addEventListener('change', function(
 requireName();
 pullCloud();
 fetchAssignments();
+setTimeout(reconcileMissingItems, 3000); // reconcile on load
 
 /* ══════════════════════════════════════════════════════
    AUDIT MODE
@@ -1243,7 +1244,22 @@ function patchCard(idx){
 /* ── CARD ACTIONS ── */
 function haptic(){if(NovusSettings.get('hapticFeedback')&&navigator.vibrate)navigator.vibrate(15);}
 function confirmHU(idx){haptic();const item=currentItems[idx];if(!item)return;if(!item.scannedQty)item.scannedQty=item.sapQty;item.status=item.scannedQty===item.sapQty?'confirmed':'adjusted';checkPhaseAdvance();patchCard(idx);}
-function markMissing(idx){haptic();const item=currentItems[idx];if(!item)return;if(item.status==='missing'){item.status='pending';item.scannedQty=0;}else{item.status='missing';item.scannedQty=0;}checkPhaseAdvance();patchCard(idx);}
+function markMissing(idx){
+  haptic();
+  const item=currentItems[idx];
+  if(!item)return;
+  if(item.status==='missing'){
+    item.status='pending';item.scannedQty=0;
+  } else {
+    item.status='missing';item.scannedQty=0;
+    // Check immediately if this HU was already found somewhere else
+    // (Case A: found before marked missing)
+    if(item.hu && item.hu !== 'UNKNOWN' && item.hu !== '0') {
+      setTimeout(reconcileMissingItems, 500); // slight delay so finalize writes first
+    }
+  }
+  checkPhaseAdvance();patchCard(idx);
+}
 function adjustQty(idx,delta){haptic();const item=currentItems[idx];if(!item)return;item.scannedQty=Math.max(0,(item.scannedQty||0)+delta);item.status='adjusted';patchCard(idx);}
 function resetHU(idx){haptic();const item=currentItems[idx];if(!item)return;item.status='pending';item.scannedQty=0;phase=1;renderPhase();patchCard(idx);}
 function confirmAll(){haptic();currentItems.forEach(item=>{if(!item.isExtra&&item.status==='pending'){item.scannedQty=item.sapQty;item.status='confirmed';}});checkPhaseAdvance();renderHUList();}
@@ -1301,6 +1317,7 @@ async function finalizeBin(){
     try{localStorage.setItem('novus_done',JSON.stringify({date:_todayStr,bins:[...completedBins]}));}catch{}
     updateDoneCount();renderStrip();stepBin(1);
     _checkAndCompleteAssignments(); // auto-remove finished assignments
+    reconcileMissingItems();        // resolve missing_temp ↔ unexpected pairs
   } else { updateFinalizeBtn(); }
 }
 
@@ -1520,6 +1537,73 @@ async function _checkAndCompleteAssignments() {
     })
     .subscribe();
 })();
+
+/* ══════════════════════════════════════════════════════
+   MISSING ITEM RECONCILIATION
+   Continuously matches missing_temp ↔ unexpected records
+   for the same HU across different bins, resolving both
+   to type = 'move' when a pair is found.
+══════════════════════════════════════════════════════ */
+
+async function reconcileMissingItems() {
+  try {
+    // Fetch all missing_temp and unexpected records for today's session
+    const { data, error } = await sb
+      .from('cycle_counts')
+      .select('id, hu, expected_bin, scanned_bin, type, notes')
+      .eq('session_id', SESSION_ID)
+      .in('type', ['missing_temp', 'unexpected']);
+
+    if (error || !data?.length) return;
+
+    const missingItems  = data.filter(r => r.type === 'missing_temp' && r.hu && r.hu !== 'UNKNOWN' && r.hu !== '0');
+    const unexpectedItems = data.filter(r => r.type === 'unexpected'  && r.hu && r.hu !== 'UNKNOWN' && r.hu !== '0');
+
+    if (!missingItems.length || !unexpectedItems.length) return;
+
+    // Build lookup: HU → unexpected record
+    const unexpectedByHU = {};
+    unexpectedItems.forEach(r => { unexpectedByHU[r.hu] = r; });
+
+    const resolved = [];
+
+    for (const miss of missingItems) {
+      const found = unexpectedByHU[miss.hu];
+      if (!found) continue;
+
+      // Same HU found in a different bin — this is a move
+      const fromBin = miss.expected_bin || miss.scanned_bin || '?';
+      const toBin   = found.scanned_bin || '?';
+
+      if (fromBin === toBin) continue; // same bin — not a move
+
+      resolved.push({ miss, found, fromBin, toBin });
+    }
+
+    if (!resolved.length) return;
+
+    // Resolve all matched pairs
+    for (const { miss, found, fromBin, toBin } of resolved) {
+      const moveNote = `Moved: ${fromBin} → ${toBin}`;
+
+      // Update missing_temp → move
+      await sb.from('cycle_counts')
+        .update({ type: 'move', notes: moveNote, scanned_bin: toBin })
+        .eq('id', miss.id);
+
+      // Update unexpected → move
+      await sb.from('cycle_counts')
+        .update({ type: 'move', notes: moveNote })
+        .eq('id', found.id);
+
+      toast(`🔄 HU ${miss.hu.slice(-6)} resolved — moved ${fromBin} → ${toBin}`, 'blue');
+      console.log(`[reconcile] HU ${miss.hu}: ${fromBin} → ${toBin}`);
+    }
+
+  } catch (err) {
+    console.warn('[reconcile] failed:', err.message);
+  }
+}
 
 /* ── UI UTILS ── */
 function switchScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+name).classList.add('active');}
