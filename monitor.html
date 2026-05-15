@@ -551,7 +551,7 @@ tbody tr:hover{background:var(--surface)}
         <button class="aisle-filter-clear" onclick="clearAisleFilter()">✕ Clear</button>
       </div>
       <div class="table-wrap" id="table-wrap">
-        <table><thead><tr><th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th><th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th><th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th><th>SAP</th></tr></thead><tbody id="skeleton-tbody"></tbody></table>
+        <table><thead><tr><th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th><th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th><th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th><th>SAP Copy</th><th>Post SAP</th></tr></thead><tbody id="skeleton-tbody"></tbody></table>
       </div>
     </div>
 
@@ -714,6 +714,36 @@ async function fetchFullDashboard() {
       from += CHUNK;
     }
     report = ccData.map(_mapCCRow);
+
+    // ── Deduplicate by HU ──────────────────────────────────────────────
+    // When a missing_temp and an unexpected share the same HU they represent
+    // the same physical item (one is moved). After reconciliation both become
+    // 'move'. Either way, only ONE row per HU should appear in the table.
+    //
+    // Priority (most resolved wins): ok > move > move_adj > adj >
+    //                                unexpected > missing_temp > missing
+    const TYPE_PRIORITY = {
+      ok: 7, move: 6, move_adj: 5, adj: 4,
+      unexpected: 3, missing_temp: 2, missing: 1, pallet_count: 0,
+    };
+
+    const huBest = new Map(); // HU → highest-priority row
+    const noHURows = [];      // rows with no trackable HU kept as-is
+
+    report.forEach(row => {
+      const hu = row.hu;
+      if (!hu || hu === 'UNKNOWN' || hu === 'EMPTY' || hu === '0') {
+        noHURows.push(row);
+        return;
+      }
+      const prev = huBest.get(hu);
+      const curP  = TYPE_PRIORITY[row.type]  ?? 0;
+      const prevP = TYPE_PRIORITY[prev?.type] ?? -1;
+      if (!prev || curP > prevP) huBest.set(hu, row);
+    });
+
+    report = [...huBest.values(), ...noHURows];
+    // ───────────────────────────────────────────────────────────────────
 
     /* ── 2. SAP meta (freshness badge + upload info) ── */
     const { count: sapCount, data: sapLatest } = await sb
@@ -1184,6 +1214,18 @@ function renderTable() {
           📋
         </button>` : '—'}
       </td>
+      <td style="text-align:center">
+        ${(r.type !== 'ok' && r.type !== 'pallet_count' && r.hu && r.prod) ? `<button
+          class="sap-post-btn"
+          data-hu="${r.hu}"
+          data-bin="${r.scanBin || ''}"
+          data-material="${r.prod || ''}"
+          data-batch="${r.batch || ''}"
+          title="Create Physical Inventory Document in SAP"
+          style="background:var(--teal-dim);border:1px solid var(--teal-border);border-radius:6px;padding:4px 9px;font-size:9px;cursor:pointer;color:var(--teal);font-weight:700;white-space:nowrap;transition:background .15s,color .15s">
+          SAP →
+        </button>` : '—'}
+      </td>
     </tr>`;
   }).join('');
 
@@ -1202,7 +1244,7 @@ function renderTable() {
     <thead><tr>
       <th>Time</th><th>User</th><th>Aisle</th><th>Bin</th><th>HU</th>
       <th>Product</th><th>SAP Qty</th><th>Count</th><th>Variance</th>
-      <th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th><th>SAP</th>
+      <th>Status</th><th>SLED</th><th>Note</th><th>Resolution</th><th>SAP Copy</th><th>Post SAP</th>
     </tr></thead>
     <tbody>${rowsHTML}</tbody>
   </table>${pagerHTML}`;
@@ -2917,6 +2959,106 @@ function _hideSAPStaleOverlay() {
 
 // Check freshness every 60 seconds
 setInterval(_checkSAPFreshness, 10 * 1000); // Every 10s for live countdown
+
+/* ══════════════════════════════════════════════════════
+   SAP ODATA INTEGRATION
+   Two-step CSRF fetch → POST to MM_IM_PHYS_INV_MASS_CREATE_SRV_01
+══════════════════════════════════════════════════════ */
+
+const SAP_SERVICE_URL = 'https://vhlfwps4ci.sap.lakeviewfarms.com:44300/sap/opu/odata/sap/MM_IM_PHYS_INV_MASS_CREATE_SRV_01';
+const SAP_ENTITY_URL  = `${SAP_SERVICE_URL}/C_PhysInvtryDocItmCreate`;
+let _sapCsrfToken     = null;
+let _sapCsrfPending   = null;
+
+function _toSAPDate(dateStr) {
+  const d = new Date(dateStr);
+  d.setUTCHours(0, 0, 0, 0);
+  return `/Date(${d.getTime()})/`;
+}
+
+async function _fetchSAPCsrfToken(force = false) {
+  if (_sapCsrfToken && !force) return _sapCsrfToken;
+  if (_sapCsrfPending)         return _sapCsrfPending;
+  _sapCsrfPending = fetch(`${SAP_SERVICE_URL}/`, {
+    method: 'GET', credentials: 'include',
+    headers: { 'X-CSRF-Token': 'Fetch', 'Accept': 'application/json' },
+  }).then(res => {
+    const token = res.headers.get('x-csrf-token');
+    if (!token || token === 'Required') throw new Error('SAP session not active — log into SAP first');
+    _sapCsrfToken = token;
+    return token;
+  }).finally(() => { _sapCsrfPending = null; });
+  return _sapCsrfPending;
+}
+
+async function _sapPost(payload) {
+  const token = await _fetchSAPCsrfToken();
+  let res = await fetch(SAP_ENTITY_URL, {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': token },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 403) {
+    _sapCsrfToken = null;
+    const fresh = await _fetchSAPCsrfToken(true);
+    res = await fetch(SAP_ENTITY_URL, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': fresh },
+      body: JSON.stringify(payload),
+    });
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.error?.message?.value || body?.error?.message || `HTTP ${res.status}`);
+  return body?.d || body;
+}
+
+async function handlePostToSAP(btn) {
+  const hu       = btn.dataset.hu;
+  const material = btn.dataset.material;
+  const batch    = btn.dataset.batch;
+  const today    = new Date().toISOString().split('T')[0];
+
+  btn.disabled    = true;
+  btn.textContent = '⏳';
+  btn.style.color = 'var(--amber)';
+  btn.style.borderColor = 'var(--amber-border)';
+
+  try {
+    const result = await _sapPost({
+      PhysicalInventoryDocument:     '',
+      PhysicalInventoryDocumentItem: '0001',
+      Plant:           '1730',
+      StorageLocation: '0001',
+      Material:        material,
+      FiscalYear:      String(new Date().getFullYear()),
+      DocumentDate:                  _toSAPDate(today),
+      PhysInventoryPlannedCountDate: _toSAPDate(today),
+      ...(batch && { Batch: batch }),
+    });
+
+    const docNum = result?.PhysicalInventoryDocument;
+    btn.textContent       = docNum ? `✓ ${docNum}` : '✓ Posted';
+    btn.style.color       = 'var(--green)';
+    btn.style.borderColor = 'var(--green-border)';
+    btn.style.background  = 'var(--green-bg)';
+    btn.style.fontSize    = '8px';
+    toast(`SAP Phys. Inv. Doc ${docNum || 'created'} ✓`, 'green');
+  } catch (err) {
+    btn.textContent       = '✗ Error';
+    btn.style.color       = 'var(--red)';
+    btn.style.borderColor = 'var(--red-border)';
+    btn.style.background  = 'var(--red-bg)';
+    btn.disabled          = false;
+    toast(err.message, 'red');
+    console.error('[SAP POST]', err);
+  }
+}
+
+// Event delegation for SAP post buttons (re-fires after every table render)
+document.getElementById('table-wrap').addEventListener('click', e => {
+  const btn = e.target.closest('.sap-post-btn');
+  if (btn && !btn.disabled) handlePostToSAP(btn);
+});
 
 /* ══════════════════════════════════════════════════════
    SAP COPY
