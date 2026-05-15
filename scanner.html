@@ -161,6 +161,47 @@ input,select,textarea{font-family:inherit}
 .fhu-note{width:100%;margin-top:8px;padding:10px 13px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);font-size:10px;font-weight:700;color:var(--text-3);text-align:left;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
 .fhu-note:hover{background:var(--fresh-bg);border-color:var(--fresh-border);color:var(--fresh)}
 .fhu-note.has{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+/* Batch cards */
+.batch-card{background:var(--surface);border-radius:16px;margin-bottom:10px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.3);border:1.5px solid transparent;transition:border-color .2s;animation:card-in .18s ease both}
+.batch-card.b-match{border-color:var(--green-border);background:var(--green-bg)}
+.batch-card.b-adjust{border-color:var(--amber-border)}
+.batch-card.b-none{border-color:var(--red-border);opacity:.75}
+.batch-card.b-pending{border-color:rgba(244,114,182,.2)}
+.batch-hdr{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.batch-label{flex:1;min-width:0}
+.batch-name{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;color:var(--fresh)}
+.batch-loc{font-size:9px;color:var(--text-3);margin-top:2px}
+.batch-sap-qty{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--text-2);flex-shrink:0}
+.batch-status-chip{font-size:8px;font-weight:800;text-transform:uppercase;padding:2px 8px;border-radius:20px;flex-shrink:0}
+.bsc-match {background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.bsc-adjust{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.bsc-none  {background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.bsc-pending{background:var(--surface-3);color:var(--text-3)}
+.batch-body{padding:12px 16px}
+.batch-qty-row{display:flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:14px;padding:6px;margin-bottom:8px}
+.batch-qty-inp{flex:1;background:transparent;border:none;text-align:center;font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;color:var(--fresh);outline:none;min-width:0;-moz-appearance:textfield}
+.batch-qty-inp::-webkit-outer-spin-button,.batch-qty-inp::-webkit-inner-spin-button{-webkit-appearance:none}
+.batch-qty-btn{width:56px;height:56px;border-radius:12px;background:var(--surface-3);font-size:22px;font-weight:900;color:var(--text-3);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,color .15s}
+.batch-qty-btn:hover{background:var(--fresh-bg);color:var(--fresh)}
+.batch-sap-hint{text-align:center;font-size:9px;font-weight:700;color:var(--text-3);margin-bottom:8px}
+.batch-actions{display:flex;gap:6px}
+.batch-act{flex:1;padding:13px 0;border-radius:12px;font-size:11px;font-weight:800;text-transform:uppercase;display:flex;align-items:center;justify-content:center;transition:filter .15s}
+.batch-act:hover{filter:brightness(1.1)}
+.batch-act.match{background:var(--green);color:#fff}
+.batch-act.none{background:var(--surface-3);color:var(--red);border:1.5px solid var(--red-border)}
+.batch-act.none.active{background:var(--red);color:#fff;border-color:transparent}
+.batch-resolved{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface-2);border-radius:12px;margin-bottom:6px}
+.batch-resolved-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700}
+.batch-resolved-val.match{color:var(--green)}
+.batch-resolved-val.over{color:var(--amber)}
+.batch-resolved-val.under{color:var(--red)}
+.batch-undo{width:100%;padding:6px;background:none;color:var(--text-3);font-size:9px;font-weight:700}
+.batch-hu-list{margin-top:8px;padding:8px 10px;background:var(--surface-2);border-radius:10px}
+.batch-hu-item{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px}
+.batch-hu-item:last-child{border-bottom:none}
+.batch-hu-num{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);font-weight:700;flex:1}
+.batch-hu-bin{color:var(--text-3);font-size:9px}
+.batch-hu-qty{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-2);font-weight:700}
 .fresh-hu-empty{text-align:center;padding:60px 24px;color:var(--text-3)}
 .fresh-hu-empty .icon{font-size:42px;margin-bottom:12px;display:block;opacity:.5}
 /* ── STANDARD SETUP ── */
@@ -359,8 +400,8 @@ input,select,textarea{font-family:inherit}
     <div class="fresh-step-2" id="fresh-step-2">
       <div class="fresh-step-label">Step 2 — Counting Method</div>
       <div class="fresh-method-toggle">
-        <button class="fresh-method-btn active" id="submode-hu"     onclick="setFreshSubMode('hu')">🔍 Count by HU</button>
-        <button class="fresh-method-btn"        id="submode-pallet" onclick="setFreshSubMode('pallet')">📦 Count by Pallet</button>
+        <button class="fresh-method-btn active" id="submode-hu"    onclick="setFreshSubMode('hu')">🔍 Per HU</button>
+        <button class="fresh-method-btn"        id="submode-batch" onclick="setFreshSubMode('batch')">📦 By Batch</button>
       </div>
       <div class="fresh-threshold-row" id="fresh-threshold-row">
         <label>Expiry warning within</label>
@@ -368,6 +409,22 @@ input,select,textarea{font-family:inherit}
         <span>days</span>
       </div>
     </div>
+    <!-- SAP Summary bar (shown in both HU + Batch modes) -->
+    <div id="fresh-sap-bar" style="display:none;flex-shrink:0;padding:10px 16px;border-bottom:1px solid var(--fresh-border);background:linear-gradient(135deg,rgba(244,114,182,.1),rgba(244,114,182,.04))">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--fresh);margin-bottom:3px">Physical Total</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--fresh)" id="fresh-phys-total">— LBS</div>
+          <div style="font-size:10px;font-weight:600;margin-top:2px" id="fresh-variance-label"></div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-3);margin-bottom:3px">SAP On-Hand</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--text-2)" id="fresh-sap-total">— LBS</div>
+          <div style="font-size:10px;color:var(--text-3);margin-top:2px" id="fresh-sap-hu-count"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Step 3a: Pallet view -->
     <div class="fresh-pallet-view" id="fresh-pallet-view">
       <div class="pallet-card">
@@ -402,6 +459,18 @@ input,select,textarea{font-family:inherit}
       </div>
       <div class="fresh-hu-list" id="fresh-hu-list"></div>
     </div>
+  </div>
+
+  <!-- Fresh Batch view -->
+  <div class="fresh-hu-view" id="fresh-batch-view">
+    <div class="fresh-hu-header">
+      <div>
+        <div class="fresh-hu-header-sku" id="fresh-batch-sku">—</div>
+        <div class="fresh-hu-header-subtitle" id="fresh-batch-subtitle">—</div>
+      </div>
+      <button class="fresh-hu-submit-btn" id="fresh-batch-submit" onclick="submitFreshBatch()">Submit All</button>
+    </div>
+    <div class="fresh-hu-list" id="fresh-batch-list"></div>
   </div>
 
   <!-- Standard setup content -->
@@ -572,7 +641,8 @@ let currentAssignments = []; // pushed from Control Center
 let freshSubMode   = 'hu';
 let freshDays      = 7;
 let activeFreshSKU = '';
-let freshHUItems   = [];
+let freshHUItems    = [];
+let freshBatchItems = [];
 let palletSessionLog = [];
 
 /* ══════════════════════════════════════════════════════
@@ -593,7 +663,7 @@ document.getElementById('bin-input').addEventListener('keydown', e => { if (e.ke
 document.getElementById('product-search').addEventListener('keydown', e => { if (e.key === 'Enter') searchProduct(); });
 document.getElementById('fresh-sku-select').addEventListener('change', function() {
   const sku = this.value;
-  if (!sku) { document.getElementById('fresh-step-2').classList.remove('revealed'); document.getElementById('fresh-threshold-row').classList.remove('visible'); document.getElementById('fresh-pallet-view').classList.remove('visible'); document.getElementById('fresh-hu-view').classList.remove('visible'); activeFreshSKU = ''; return; }
+  if (!sku) { document.getElementById('fresh-step-2').classList.remove('revealed'); document.getElementById('fresh-threshold-row').classList.remove('visible'); document.getElementById('fresh-pallet-view').classList.remove('visible'); document.getElementById('fresh-hu-view').classList.remove('visible'); document.getElementById('fresh-batch-view').classList.remove('visible'); document.getElementById('fresh-sap-bar').style.display='none'; activeFreshSKU = ''; return; }
   activeFreshSKU = sku;
   document.getElementById('fresh-step-2').classList.add('revealed');
   setFreshSubMode(freshSubMode);
@@ -628,24 +698,34 @@ function _freshReset() {
   document.getElementById('fresh-threshold-row').classList.remove('visible');
   document.getElementById('fresh-pallet-view').classList.remove('visible');
   document.getElementById('fresh-hu-view').classList.remove('visible');
-  activeFreshSKU = ''; freshHUItems = [];
+  document.getElementById('fresh-batch-view').classList.remove('visible');
+  document.getElementById('fresh-sap-bar').style.display = 'none';
+  activeFreshSKU = ''; freshHUItems = []; freshBatchItems = [];
 }
 
 function setFreshSubMode(mode) {
   freshSubMode = mode;
-  document.getElementById('submode-hu').classList.toggle('active',     mode === 'hu');
-  document.getElementById('submode-pallet').classList.toggle('active', mode === 'pallet');
+  document.getElementById('submode-hu').classList.toggle('active',    mode === 'hu');
+  document.getElementById('submode-batch').classList.toggle('active', mode === 'batch');
   document.getElementById('fresh-threshold-row').classList.toggle('visible', mode === 'hu');
   if (!activeFreshSKU) return;
-  if (mode === 'pallet') {
-    document.getElementById('fresh-hu-view').classList.remove('visible');
-    _populatePalletCard(activeFreshSKU);
-    document.getElementById('fresh-pallet-view').classList.add('visible');
+
+  // Hide all views first
+  document.getElementById('fresh-pallet-view').classList.remove('visible');
+  document.getElementById('fresh-hu-view').classList.remove('visible');
+  document.getElementById('fresh-batch-view').classList.remove('visible');
+
+  if (mode === 'batch') {
+    loadFreshBatchItems(activeFreshSKU);
+    document.getElementById('fresh-batch-view').classList.add('visible');
+    document.getElementById('fresh-sap-bar').style.display = 'block';
   } else {
-    document.getElementById('fresh-pallet-view').classList.remove('visible');
+    // hu mode
     loadFreshHUItems(activeFreshSKU);
     document.getElementById('fresh-hu-view').classList.add('visible');
+    document.getElementById('fresh-sap-bar').style.display = 'block';
   }
+  _updateFreshSAPBar();
 }
 
 /* ══════════════════════════════════════════════════════
@@ -780,6 +860,7 @@ function patchFreshCard(idx) {
   tmp.innerHTML = _fhuCardHTML(freshHUItems[idx], idx).trim();
   old.replaceWith(tmp.content.firstElementChild);
   _updateFreshHUSubmitBtn();
+  _updateFreshSAPBar();
 }
 
 function _fhuCardHTML(item, idx) {
@@ -875,6 +956,254 @@ function fhuAddNote(idx) { const note=prompt('Note:',freshHUItems[idx].note||'')
     patchFreshCard(parseInt(e.target.dataset.idx,10));
   });
 })();
+
+/* ── SAP Summary Bar ── */
+function _updateFreshSAPBar() {
+  const bar = document.getElementById('fresh-sap-bar');
+  if (!bar || bar.style.display === 'none') return;
+
+  const items   = freshSubMode === 'batch' ? freshBatchItems : freshHUItems;
+  const sapTotal = items.reduce((s, i) => s + (i.sapQty || 0), 0);
+  const physTotal = items.reduce((s, i) => {
+    const q = freshSubMode === 'batch' ? (i.physicalQty ?? '') : (i.scannedQty ?? '');
+    return s + (parseFloat(q) || 0);
+  }, 0);
+  const unit  = items[0]?.unit || 'LB';
+  const huCount = freshSubMode === 'batch'
+    ? items.reduce((s, b) => s + (b.hus?.length || 0), 0)
+    : items.length;
+
+  document.getElementById('fresh-phys-total').textContent =
+    physTotal > 0 ? `${physTotal.toLocaleString()} ${unit}` : `— ${unit}`;
+  document.getElementById('fresh-sap-total').textContent  =
+    sapTotal  > 0 ? `${sapTotal.toLocaleString()} ${unit}` : `— ${unit}`;
+  document.getElementById('fresh-sap-hu-count').textContent =
+    huCount > 0 ? `${huCount} HU${huCount !== 1 ? 's' : ''} in SAP` : '';
+
+  const varEl = document.getElementById('fresh-variance-label');
+  if (physTotal > 0 && sapTotal > 0) {
+    const diff  = physTotal - sapTotal;
+    const sign  = diff > 0 ? '+' : '';
+    const color = diff === 0 ? 'var(--green)' : diff > 0 ? 'var(--amber)' : 'var(--red)';
+    varEl.style.color   = color;
+    varEl.textContent   = diff === 0
+      ? '✓ Matches SAP'
+      : `${sign}${diff.toLocaleString()} vs SAP`;
+  } else { varEl.textContent = ''; }
+}
+
+/* ── Batch Mode ── */
+function loadFreshBatchItems(sku) {
+  const records = sapMaster.filter(i => i.product.toUpperCase() === sku.toUpperCase());
+  const desc    = FRESH_SKU_DESCRIPTIONS[sku] || sku;
+
+  document.getElementById('fresh-batch-sku').textContent      = sku;
+  document.getElementById('fresh-batch-subtitle').textContent =
+    records.length > 0
+      ? `${desc} · ${records.length} HU${records.length !== 1 ? 's' : ''} in SAP`
+      : `${desc} · No SAP records`;
+
+  // Group by batch
+  const batchMap = {};
+  records.forEach(r => {
+    const b = r.batch || '(No Batch)';
+    if (!batchMap[b]) batchMap[b] = {
+      batch: b, hus: [], sapQty: 0, unit: r.unit || 'LB', locations: new Set(),
+    };
+    batchMap[b].hus.push(r);
+    batchMap[b].sapQty += r.sapQty || 0;
+    if (r.sapBin) batchMap[b].locations.add(r.sapBin);
+  });
+
+  freshBatchItems = Object.values(batchMap).map(b => ({
+    batch:       b.batch,
+    hus:         b.hus,
+    sapQty:      b.sapQty,
+    unit:        b.unit,
+    locations:   [...b.locations].join(', '),
+    physicalQty: null,
+    status:      'pending',
+    note:        '',
+  }));
+
+  renderFreshBatchCards();
+  _updateFreshBatchSubmitBtn();
+}
+
+function _updateFreshBatchSubmitBtn() {
+  const btn     = document.getElementById('fresh-batch-submit');
+  const pending = freshBatchItems.filter(b => b.status === 'pending').length;
+  const total   = freshBatchItems.length;
+  if (!total)    { btn.disabled = true;  btn.textContent = 'No Items'; }
+  else if (pending) { btn.disabled = true;  btn.textContent = `${pending} Unverified`; }
+  else           { btn.disabled = false; btn.textContent = `Submit ${total} Batch${total !== 1 ? 'es' : ''}`; }
+}
+
+function renderFreshBatchCards() {
+  const list = document.getElementById('fresh-batch-list');
+  if (!freshBatchItems.length) {
+    list.innerHTML = `<div class="fresh-hu-empty"><span class="icon">📭</span><p style="font-weight:700">No SAP records for this SKU</p></div>`;
+    _updateFreshBatchSubmitBtn(); return;
+  }
+  list.innerHTML = freshBatchItems.map((b, idx) => _batchCardHTML(b, idx)).join('');
+  _updateFreshBatchSubmitBtn();
+  _updateFreshSAPBar();
+}
+
+function patchBatchCard(idx) {
+  if (idx < 0 || idx >= freshBatchItems.length) return;
+  const old = document.querySelector(`#fresh-batch-list [data-batch-idx="${idx}"]`);
+  if (!old) { renderFreshBatchCards(); return; }
+  const tmp = document.createElement('template');
+  tmp.innerHTML = _batchCardHTML(freshBatchItems[idx], idx).trim();
+  old.replaceWith(tmp.content.firstElementChild);
+  _updateFreshBatchSubmitBtn();
+  _updateFreshSAPBar();
+}
+
+function _batchCardHTML(b, idx) {
+  const isMatch  = b.status === 'match';
+  const isNone   = b.status === 'none';
+  const isAdj    = b.status === 'adjust';
+  const isPend   = b.status === 'pending';
+  const cardCls  = isMatch ? 'b-match' : isNone ? 'b-none' : isAdj ? 'b-adjust' : 'b-pending';
+  const chipTxt  = isMatch ? '✓ Match' : isNone ? 'Not Found' : isAdj ? 'Adjusted' : 'Pending';
+  const chipCls  = isMatch ? 'bsc-match' : isNone ? 'bsc-none' : isAdj ? 'bsc-adjust' : 'bsc-pending';
+  const physQ    = b.physicalQty;
+  const hasVal   = physQ !== null && physQ !== '';
+  const diff     = hasVal ? (parseFloat(physQ) - b.sapQty) : null;
+  const diffStr  = diff !== null ? ((diff > 0 ? '+' : '') + diff.toLocaleString()) : '';
+  const diffColor= diff === 0 ? 'var(--green)' : diff > 0 ? 'var(--amber)' : 'var(--red)';
+  const huListHTML = b.hus.length <= 5 ? b.hus.map(h =>
+    `<div class="batch-hu-item">
+      <span class="batch-hu-num">${escHtml(h.hu || '—')}</span>
+      <span class="batch-hu-bin">${escHtml(h.sapBin || '')}</span>
+      <span class="batch-hu-qty">${h.sapQty.toLocaleString()} ${h.unit}</span>
+    </div>`).join('')
+    : `<div style="font-size:9px;color:var(--text-3);padding:4px 0">${b.hus.length} HUs in this batch</div>`;
+
+  let controls;
+  if (isPend || isAdj) {
+    controls = `
+      <div class="batch-qty-row">
+        <button class="batch-qty-btn" data-batch-action="dec" data-idx="${idx}">−</button>
+        <input class="batch-qty-inp" type="number" inputmode="numeric" data-idx="${idx}"
+          value="${hasVal ? physQ : ''}" placeholder="${b.sapQty}"
+          onfocus="this.select()">
+        <button class="batch-qty-btn" data-batch-action="inc" data-idx="${idx}">+</button>
+      </div>
+      <div class="batch-sap-hint">SAP on-hand: <strong>${b.sapQty.toLocaleString()} ${b.unit}</strong></div>
+      <div class="batch-actions">
+        <button class="batch-act match" data-batch-action="match" data-idx="${idx}">✓ Match SAP</button>
+        <button class="batch-act none${isNone ? ' active' : ''}" data-batch-action="none" data-idx="${idx}">Not Found</button>
+      </div>`;
+  } else {
+    const valColor = diff === 0 ? 'match' : diff > 0 ? 'over' : 'under';
+    controls = `
+      <div class="batch-resolved">
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-3)">Physical</span>
+        <span class="batch-resolved-val ${valColor}">${parseFloat(physQ).toLocaleString()} ${b.unit}</span>
+      </div>
+      ${diff !== null && diff !== 0 ? `<div style="text-align:center;font-size:10px;font-weight:700;color:${diffColor};margin-bottom:6px">${diffStr} vs SAP</div>` : ''}
+      <button class="batch-undo" data-batch-action="undo" data-idx="${idx}">↺ Undo</button>`;
+  }
+
+  return `
+    <div class="batch-card ${cardCls}" data-batch-idx="${idx}">
+      <div class="batch-hdr">
+        <div class="batch-label">
+          <div style="display:flex;align-items:center;gap:7px">
+            <span class="batch-name">${b.batch === '(No Batch)' ? 'No Batch #' : 'Batch ' + escHtml(b.batch)}</span>
+            <span class="batch-status-chip ${chipCls}">${chipTxt}</span>
+          </div>
+          ${b.locations ? `<div class="batch-loc">📍 ${escHtml(b.locations)}</div>` : ''}
+        </div>
+        <span class="batch-sap-qty">${b.sapQty.toLocaleString()} ${b.unit}</span>
+      </div>
+      <div class="batch-body">
+        ${controls}
+        <div class="batch-hu-list">${huListHTML}</div>
+      </div>
+    </div>`;
+}
+
+/* Batch event delegation */
+(function() {
+  const list = document.getElementById('fresh-batch-list');
+  list.addEventListener('click', e => {
+    const btn = e.target.closest('[data-batch-action]'); if (!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    const b   = freshBatchItems[idx]; if (!b) return;
+    switch (btn.dataset.batchAction) {
+      case 'match':
+        b.physicalQty = b.sapQty; b.status = 'match'; patchBatchCard(idx); break;
+      case 'none':
+        b.physicalQty = b.status === 'none' ? null : 0;
+        b.status = b.status === 'none' ? 'pending' : 'none'; patchBatchCard(idx); break;
+      case 'undo':
+        b.physicalQty = null; b.status = 'pending'; patchBatchCard(idx); break;
+      case 'inc':
+        b.physicalQty = (parseFloat(b.physicalQty) || 0) + 1;
+        b.status = _batchStatus(b); patchBatchCard(idx); break;
+      case 'dec':
+        b.physicalQty = Math.max(0, (parseFloat(b.physicalQty) || 0) - 1);
+        b.status = _batchStatus(b); patchBatchCard(idx); break;
+    }
+  });
+  list.addEventListener('input', e => {
+    if (!e.target.classList.contains('batch-qty-inp')) return;
+    const idx = parseInt(e.target.dataset.idx, 10);
+    const b   = freshBatchItems[idx]; if (!b) return;
+    b.physicalQty = parseFloat(e.target.value) || null;
+    b.status = _batchStatus(b);
+    _updateFreshBatchSubmitBtn();
+    _updateFreshSAPBar();
+  });
+  list.addEventListener('change', e => {
+    if (!e.target.classList.contains('batch-qty-inp')) return;
+    patchBatchCard(parseInt(e.target.dataset.idx, 10));
+  });
+})();
+
+function _batchStatus(b) {
+  if (b.physicalQty === null || b.physicalQty === '') return 'pending';
+  if (b.physicalQty === 0) return 'none';
+  return Math.abs(b.physicalQty - b.sapQty) < 0.5 ? 'match' : 'adjust';
+}
+
+async function submitFreshBatch() {
+  const pending = freshBatchItems.filter(b => b.status === 'pending').length;
+  if (pending > 0) { toast(`${pending} batch${pending !== 1 ? 'es' : ''} still unverified`, 'amber'); return; }
+  if (!freshBatchItems.length) return;
+
+  const btn = document.getElementById('fresh-batch-submit');
+  btn.disabled = true; btn.textContent = '⏳ Submitting…';
+  const user = NovusSettings.getUser() || 'Counter';
+
+  const rows = freshBatchItems.flatMap(b => {
+    const qty  = parseFloat(b.physicalQty) || 0;
+    const type = b.status === 'none' ? 'missing_temp' : b.status === 'match' ? 'ok' : 'adj';
+    // One row per HU in the batch
+    return b.hus.map(h => ({
+      session_id: SESSION_ID, hu: h.hu, expected_bin: h.sapBin || null,
+      scanned_bin: h.sapBin || null, aisle: (h.sapBin || '').charAt(1) || '',
+      expected_qty: h.sapQty, scanned_qty: qty / b.hus.length, // distribute evenly
+      type, notes: `Batch ${b.batch} · Physical: ${qty} ${b.unit}`,
+      scanned_by: user, material: h.product, description: h.desc,
+      batch: h.batch, unit: h.unit, sled: h.sled || null,
+      sled_status: h.sled ? sledStatus(h.sled) : null, audit_mode: 'fresh',
+    }));
+  });
+
+  const ok = await sendRows(rows, null);
+  btn.disabled = false;
+  if (ok) {
+    toast(`🧊 ${freshBatchItems.length} batch${freshBatchItems.length !== 1 ? 'es' : ''} submitted ✓`, 'green');
+    _freshReset();
+  } else {
+    btn.textContent = 'Retry Submit';
+  }
+}
 
 async function submitFreshHU() {
   const pending = freshHUItems.filter(i => i.status === 'pending').length;
