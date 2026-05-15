@@ -6,6 +6,7 @@
 <title>Control Center — Novus Ops</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js" onerror="window._mermaidFailed=true"></script>
 <style>
 :root {
@@ -495,6 +496,7 @@ tbody tr:hover{background:var(--surface)}
         📂 Link Daily_Tasks.xlsx
       </button>
       <button class="rail-btn primary" onclick="exportAudit()" style="width:100%;padding:9px;margin-bottom:6px">📥 Export Audit (.xlsx)</button>
+      <button class="rail-btn ghost"   onclick="export30DayHistory()" style="width:100%;padding:9px;margin-bottom:6px;border-color:rgba(167,139,250,.3);color:var(--purple)">📦 Export 30-Day History</button>
       <button class="rail-btn ghost" onclick="printEndOfShift()" style="width:100%;padding:9px;border-color:rgba(167,139,250,.3);color:var(--purple)">🖨 End of Shift Report</button>
     </div>
     <div class="rail-section" style="border-bottom:none">
@@ -537,6 +539,27 @@ tbody tr:hover{background:var(--surface)}
         <div class="kpi-card"><div class="kpi-bar" id="bin-acc-bar" style="--bar-color:var(--green)"></div><div class="kpi-label">Bin Accuracy</div><div class="kpi-value green" id="kpi-bin-acc">—</div><div class="kpi-sub">Perfect bins / total bins</div></div>
         <div class="kpi-card"><div class="kpi-bar" id="inv-acc-bar" style="--bar-color:var(--green)"></div><div class="kpi-label">Inventory Accuracy</div><div class="kpi-value green" id="kpi-inv-acc">—</div><div class="kpi-sub">OK HUs / total audited HUs</div></div>
       </div>
+      <!-- Accuracy Trend Chart -->
+      <div id="trend-section" style="padding:16px 20px 0;flex-shrink:0">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div>
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-3)">📈 Accuracy Trend</div>
+              <div style="font-size:9px;color:var(--text-3);margin-top:2px" id="trend-range">Last 30 days</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:center">
+              <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:3px;border-radius:2px;background:#0d9488"></div><span style="font-size:9px;color:var(--text-3)">Bin Accuracy</span></div>
+              <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:3px;border-radius:2px;background:#5b9aff"></div><span style="font-size:9px;color:var(--text-3)">Inv. Accuracy</span></div>
+              <button onclick="fetchTrendData()" style="background:none;border:none;color:var(--text-3);font-size:10px;cursor:pointer;font-family:inherit;padding:0">↻</button>
+            </div>
+          </div>
+          <div style="position:relative;height:120px">
+            <canvas id="trend-chart"></canvas>
+            <div id="trend-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:11px">Loading trend data…</div>
+          </div>
+        </div>
+      </div>
+
       <div class="metrics-strip">
         <div class="metric-chip"><div class="chip-dot" style="background:var(--amber)"></div><span class="chip-label">Pending</span><span class="chip-val amber mono" id="chip-pending">—</span></div>
         <div class="metric-chip"><div class="chip-dot" style="background:var(--red)"></div><span class="chip-label">Missing</span><span class="chip-val red mono" id="chip-missing">—</span></div>
@@ -656,6 +679,7 @@ NovusLoader.start();
 fetchFullDashboard();
 fetchActiveAssignments();
 fetchExistingReports();
+fetchTrendData();
 initAislePicker();
 _subscribeRealtime();
 setInterval(pollLightweight, 30000); // fallback — Realtime handles instant updates
@@ -862,6 +886,7 @@ function showView(name) {
   document.getElementById('view-' + name)?.classList.add('active');
   document.getElementById('tab-'  + name)?.classList.add('active');
   if (name === 'training') fetchCycleCountRequests();
+  if (name === 'audit')    fetchTrendData();
   if (name === 'safety')   renderSafetyView();
   if (name === 'aisles')   renderAisleView();
 }
@@ -2614,6 +2639,294 @@ async function fetchExistingReports() {
 }
 
 // counter_report events are handled in _subscribeActiveAssignments below
+
+/* ══════════════════════════════════════════════════════
+   ACCURACY TREND CHART — 30-day rolling
+══════════════════════════════════════════════════════ */
+let _trendChart = null;
+
+async function fetchTrendData() {
+  const empty = document.getElementById('trend-empty');
+  if (empty) empty.textContent = 'Loading…';
+
+  try {
+    // Fetch last 30 days of cycle_counts (all sessions)
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    cutoff.setHours(0, 0, 0, 0);
+
+    let all = [], from = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from('cycle_counts')
+        .select('scanned_at, type, hu')
+        .neq('type', 'pallet_count')
+        .gte('scanned_at', cutoff.toISOString())
+        .order('scanned_at', { ascending: true })
+        .range(from, from + 999);
+      if (error) throw error;
+      all = all.concat(data || []);
+      if (!data || data.length < 1000) break;
+      from += 1000;
+    }
+
+    if (!all.length) {
+      if (empty) empty.textContent = 'No data in the last 30 days';
+      return;
+    }
+
+    // Group by date (YYYY-MM-DD)
+    const byDate = {};
+    all.forEach(r => {
+      const day = r.scanned_at.slice(0, 10);
+      if (!byDate[day]) byDate[day] = [];
+      byDate[day].push(r);
+    });
+
+    // Calculate accuracies per day using same dedup + formula as updateMetrics
+    const labels   = [];
+    const binAccs  = [];
+    const invAccs  = [];
+
+    Object.keys(byDate).sort().forEach(day => {
+      const rows = byDate[day];
+
+      // Deduplicate by HU
+      const movedHUs = new Set(
+        rows.filter(r => r.type === 'move' || r.type === 'move_adj')
+            .map(r => r.hu).filter(Boolean)
+      );
+      const effective = rows.filter(r =>
+        !(r.type === 'missing_temp' && movedHUs.has(r.hu))
+      );
+      const total = effective.length;
+      if (!total) return;
+
+      const wrongBin = effective.filter(r =>
+        ['move','move_adj','unexpected','missing','missing_temp'].includes(r.type)
+      ).length;
+      const wrongQty = effective.filter(r =>
+        ['adj','move_adj','unexpected','missing','missing_temp'].includes(r.type)
+      ).length;
+
+      labels.push(new Date(day + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' }));
+      binAccs.push(+((1 - wrongBin / total) * 100).toFixed(1));
+      invAccs.push(+((1 - wrongQty / total) * 100).toFixed(1));
+    });
+
+    if (empty) empty.style.display = 'none';
+
+    const rangeEl = document.getElementById('trend-range');
+    if (rangeEl) rangeEl.textContent = `${labels[0]} – ${labels[labels.length - 1]} (${labels.length} day${labels.length !== 1 ? 's' : ''})`;
+
+    _renderTrendChart(labels, binAccs, invAccs);
+
+  } catch (err) {
+    if (empty) empty.textContent = 'Failed to load trend: ' + err.message;
+    console.error('[trend]', err);
+  }
+}
+
+function _renderTrendChart(labels, binAccs, invAccs) {
+  const canvas = document.getElementById('trend-chart');
+  if (!canvas) return;
+
+  if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+
+  _trendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label:           'Bin Accuracy',
+          data:            binAccs,
+          borderColor:     '#0d9488',
+          backgroundColor: 'rgba(13,148,136,.08)',
+          borderWidth:     2,
+          pointRadius:     labels.length > 14 ? 2 : 4,
+          pointHoverRadius:6,
+          tension:         0.35,
+          fill:            true,
+        },
+        {
+          label:           'Inv. Accuracy',
+          data:            invAccs,
+          borderColor:     '#5b9aff',
+          backgroundColor: 'rgba(91,154,255,.06)',
+          borderWidth:     2,
+          pointRadius:     labels.length > 14 ? 2 : 4,
+          pointHoverRadius:6,
+          tension:         0.35,
+          fill:            true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          borderColor:     '#313546',
+          borderWidth:     1,
+          titleColor:      '#e1e5f0',
+          bodyColor:       '#94a3b8',
+          padding:         10,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid:  { color: 'rgba(255,255,255,.04)' },
+          ticks: { color: '#4a5568', font: { size: 9 }, maxTicksLimit: 8 },
+          border:{ color: 'transparent' },
+        },
+        y: {
+          min:   50,
+          max:   100,
+          grid:  { color: 'rgba(255,255,255,.04)' },
+          ticks: { color: '#4a5568', font: { size: 9 }, callback: v => v + '%' },
+          border:{ color: 'transparent' },
+        },
+      },
+    },
+  });
+}
+
+// Fetch trend data when the audit tab is shown
+const _origShowView = window.showView;
+
+/* ══════════════════════════════════════════════════════
+   30-DAY HISTORY EXPORT + CLEAR
+══════════════════════════════════════════════════════ */
+async function export30DayHistory() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  cutoff.setHours(0, 0, 0, 0);
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Fetching…'; }
+  NovusLoader.start();
+
+  try {
+    // Fetch all data from last 30 days
+    let all = [], from = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from('cycle_counts')
+        .select('*')
+        .gte('scanned_at', cutoff.toISOString())
+        .order('scanned_at', { ascending: true })
+        .range(from, from + 999);
+      if (error) throw error;
+      all = all.concat(data || []);
+      if (!data || data.length < 1000) break;
+      from += 1000;
+    }
+
+    if (!all.length) { toast('No data in the last 30 days', 'amber'); return; }
+
+    // Map to display rows
+    const rows = all.map(_mapCCRow);
+
+    // Deduplicate by HU (same logic as updateMetrics)
+    const TYPE_PRIORITY = { ok:7, move:6, move_adj:5, adj:4, unexpected:3, missing_temp:2, missing:1, pallet_count:0 };
+    const huBest = new Map();
+    const noHU   = [];
+    rows.forEach(r => {
+      const hu = r.hu;
+      if (!hu || hu === 'UNKNOWN' || hu === 'EMPTY' || hu === '0') { noHU.push(r); return; }
+      const prev = huBest.get(hu);
+      if (!prev || (TYPE_PRIORITY[r.type] ?? 0) > (TYPE_PRIORITY[prev.type] ?? 0)) huBest.set(hu, r);
+    });
+    const deduped = [...huBest.values(), ...noHU];
+
+    // Build per-day accuracy summary sheet
+    const byDate = {};
+    deduped.forEach(r => {
+      const day = r.timestamp?.slice(0, 10) || 'Unknown';
+      if (!byDate[day]) byDate[day] = [];
+      byDate[day].push(r);
+    });
+
+    const summaryRows = [['Date', 'Session', 'HUs Audited', 'OK', 'Discrepancies', 'Bin Accuracy %', 'Inv. Accuracy %']];
+    Object.keys(byDate).sort().forEach(day => {
+      const dayRows = byDate[day];
+      const movedHUs = new Set(dayRows.filter(r => r.type === 'move' || r.type === 'move_adj').map(r => r.hu).filter(Boolean));
+      const eff      = dayRows.filter(r => !(r.type === 'missing_temp' && movedHUs.has(r.hu)));
+      const total    = eff.length;
+      const ok       = eff.filter(r => r.type === 'ok').length;
+      const disc     = total - ok;
+      const wrongBin = eff.filter(r => ['move','move_adj','unexpected','missing','missing_temp'].includes(r.type)).length;
+      const wrongQty = eff.filter(r => ['adj','move_adj','unexpected','missing','missing_temp'].includes(r.type)).length;
+      const binAcc   = total ? ((1 - wrongBin / total) * 100).toFixed(1) : 'N/A';
+      const invAcc   = total ? ((1 - wrongQty / total) * 100).toFixed(1) : 'N/A';
+      const session  = dayRows[0]?.timestamp?.slice(0, 10) ? `S-${day}` : '—';
+      summaryRows.push([day, session, total, ok, disc, binAcc + '%', invAcc + '%']);
+    });
+
+    // Build detail sheet
+    const HEADERS = ['Date','Session','Counter','Bin','HU','Product','Description','SAP Qty','Count','Variance','Type','Note'];
+    const detailRows = deduped.map(r => {
+      const day     = r.timestamp?.slice(0, 10) || '';
+      const expQty  = r.sapQty  ?? 0;
+      const scanQty = r.scanQty ?? 0;
+      return [day, `S-${day}`, r.user||'', r.scanBin||'', r.hu||'', r.prod||'', r.desc||'', expQty, scanQty, scanQty - expQty, r.type||'', r.note||''];
+    });
+
+    // Build workbook with two sheets
+    const wb = XLSX.utils.book_new();
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+    const wsDetail  = XLSX.utils.aoa_to_sheet([HEADERS, ...detailRows]);
+    wsSummary['!cols'] = [{wch:12},{wch:14},{wch:12},{wch:6},{wch:14},{wch:14},{wch:14}];
+    wsDetail['!cols']  = [{wch:12},{wch:14},{wch:14},{wch:12},{wch:14},{wch:12},{wch:36},{wch:10},{wch:8},{wch:10},{wch:14},{wch:24}];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Accuracy Summary');
+    XLSX.utils.book_append_sheet(wb, wsDetail,  'Daily Count & Reconciliation Lo');
+
+    const filename = `Novus_30Day_History_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast(`Exported ${deduped.length.toLocaleString()} records → ${filename}`, 'green');
+
+    // Prompt to clear after export
+    setTimeout(() => {
+      if (confirm(`Export complete (${deduped.length} records).
+
+Clear all cycle count data now for a fresh start?`)) {
+        _clearAll30Days(cutoff);
+      }
+    }, 500);
+
+  } catch (err) {
+    toast('Export failed: ' + err.message, 'red');
+    console.error('[30d export]', err);
+  } finally {
+    NovusLoader.done();
+    if (btn) { btn.disabled = false; btn.textContent = '📦 Export 30-Day History'; }
+  }
+}
+
+async function _clearAll30Days(cutoff) {
+  NovusLoader.start();
+  try {
+    const { error } = await sb
+      .from('cycle_counts')
+      .delete()
+      .gte('scanned_at', cutoff.toISOString());
+    if (error) throw error;
+    toast('All data cleared ✓ Fresh start ready', 'green');
+    fetchFullDashboard();
+    fetchTrendData();
+  } catch (err) {
+    toast('Clear failed: ' + err.message, 'red');
+  } finally {
+    NovusLoader.done();
+  }
+}
 
 /* ══════════════════════════════════════════════════════
    CYCLE COUNT REQUESTS TAB
