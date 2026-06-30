@@ -643,9 +643,10 @@ const ALL_BINS={
   LR:['LR01A','LR01B','LR01C','LR02A','LR02B','LR02C','LR03A','LR03B','LR03C','LR04A','LR04B','LR04C','LR05A','LR05B','LR05C','LR06A','LR06B','LR06C','LR07A','LR07B','LR07C','LR08A','LR08B','LR08C','LR09A','LR09B','LR09C','LR10A','LR10B','LR10C','LR11A','LR11B','LR11C','LR12A','LR12B','LR12C','LR13A','LR13B','LR13C','LR14A','LR14B','LR14C','LR15A','LR15B','LR15C','LR16A','LR16B','LR16C','LR17A','LR17B','LR17C','LR18A','LR18B','LR18C','LR19A','LR19B','LR19C','LR20A','LR20B','LR20C','LR21A','LR21B','LR21C','LR22A','LR22B','LR22C','LR23A','LR23B','LR23C','LR24A','LR24B','LR24C','LR25A','LR25B','LR25C','LR26A','LR26B','LR26C'],
   RECV:['RECV-HOLD','RECV01','RECV02','RECV03','RECV04','RECV05'],
   STG:['B101','B102','B103','B104','B105','B106','B107','B108','B109','B110','B111','B112','B113','B114','STG-INSIDE-01','STG-INSIDE-02','STG03','STG04','STG05','STG06','STG07','STG08','STG09','STG10','STG11','STG12','STG13','STG14','STG_RTN'],
-  PROD:['KITS-FLOOR','MIXAREA1_HU','MIXAREA1_HU_FIX','MIXAREA2_HU','MIXAREA2_HU_FIX','PACKRM1_HU','PACKRM1_NHU','PACKRM2_HU','PACKRM2_NHU','PRFL-01-02','PRFL-01-04','PSA_INTERMEDIATE','SPICE-BLND-FLOOR','SPICERM_HU'],
+  PROD:['KITS-FLOOR','MIXAREA1_HU','MIXAREA1_HU_FIX','MIXAREA2_HU','MIXAREA2_HU_FIX','PACKRM1_HU','PACKRM1_NHU','PACKRM2_HU','PACKRM2_NHU','PREPRM_HU','PREPRM_HU_FIX','PRFL-01-02','PRFL-01-04','PSA_INTERMEDIATE','SPICE-BLND-FLOOR','SPICERM_HU'],
+  MISC:['CLARFICATION','C_TRUCK','GR-PRODUCTION','GR-ZONE','GR-ZONE-SMALLPARC','LABEL-ROOM','LABELRM_NHU','OUT_SMALL_PARCEL','PKG_RETURN','VIRTUAL_BIN','VIRTUAL_FLUID_LOAD','VIRTUAL_RET_BIN'],
 };
-const ZONE_DISPLAY={WA:'WA',WB:'WB',WC:'WC',WD:'WD',WE:'WE',WF:'WF',WG:'WG',WH:'WH',FA:'FA',FB:'FB',FC:'FC',FD:'FD',FZ:'FZ',LR:'Label Rm',RECV:'Receiving',STG:'Staging',PROD:'Production'};
+const ZONE_DISPLAY={WA:'WA',WB:'WB',WC:'WC',WD:'WD',WE:'WE',WF:'WF',WG:'WG',WH:'WH',FA:'FA',FB:'FB',FC:'FC',FD:'FD',FZ:'FZ',LR:'Label Rm',RECV:'Receiving',STG:'Staging',PROD:'Production',MISC:'Misc / Virtual'};
 const ALL_BIN_LIST=Object.entries(ALL_BINS).flatMap(([z,bins])=>bins.map(b=>({b,z})));
 
 let sapData=[],sapByBin={},huIndex=new Map();
@@ -762,7 +763,7 @@ function buildSAPIdx(){
 function buildGrids(){
   buildGrid('grid-W',['WA','WB','WC','WD','WE','WF','WG','WH']);
   buildGrid('grid-F',['FA','FB','FC','FD','FZ']);
-  buildGrid('grid-O',['LR','RECV','STG','PROD']);
+  buildGrid('grid-O',['LR','RECV','STG','PROD','MISC']);
 }
 function buildGrid(gid,zones){
   const grid=document.getElementById(gid);grid.innerHTML='';
@@ -809,13 +810,13 @@ function buildProgressGrid(){
   }
   sec.innerHTML='<div class="prog-zone-lbl">🏭 Warehouse</div>'+makePGrid(['WA','WB','WC','WD','WE','WF','WG','WH'])
     +'<div class="prog-zone-lbl">❄ Freezer</div>'+makePGrid(['FA','FB','FC','FD','FZ'])
-    +'<div class="prog-zone-lbl">📦 Other areas</div>'+makePGrid(['LR','RECV','STG','PROD']);
+    +'<div class="prog-zone-lbl">📦 Other areas</div>'+makePGrid(['LR','RECV','STG','PROD','MISC']);
 }
 
 function buildMiniProgress(){
   const el=document.getElementById('mini-progress');
   if(!el)return;
-  const groups=[{label:'Warehouse',zones:['WA','WB','WC','WD','WE','WF','WG','WH']},{label:'Freezer',zones:['FA','FB','FC','FD','FZ']},{label:'Other',zones:['LR','RECV','STG','PROD']}];
+  const groups=[{label:'Warehouse',zones:['WA','WB','WC','WD','WE','WF','WG','WH']},{label:'Freezer',zones:['FA','FB','FC','FD','FZ']},{label:'Other',zones:['LR','RECV','STG','PROD','MISC']}];
   if(!sapData.length){el.innerHTML='<div style="font-size:11px;color:var(--txt3);text-align:center;padding:12px 0">Upload SAP data to see progress</div>';return;}
   const doneSet=new Set(countResults.map(r=>r.scanned_bin).filter(Boolean));
   el.innerHTML=groups.map(g=>{
