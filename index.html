@@ -1126,8 +1126,7 @@ function jumpToBin(bin,zone){
   clearBinSearch();
   const allBins=ALL_BINS[zone]||[];
   activeZone=zone;
-  const sapBins=allBins.filter(b=>sapByBin[b]);
-  zoneBins=sapBins.length?sapBins:allBins.slice();
+  zoneBins=allBins.slice();
   const idx=zoneBins.indexOf(bin);
   if(idx<0){zoneBins=[bin,...zoneBins];binIdx=0;}else{binIdx=idx;}
   document.getElementById('screen-aisle').style.display='none';
@@ -1145,8 +1144,7 @@ function selectZone(zone,bins){
   if(!sapData.length){toast('Upload SAP data first','amb');return;}
   activeZone=zone;
   const b=bins||ALL_BINS[zone]||[];
-  const sapBins=b.filter(x=>sapByBin[x]);
-  zoneBins=sapBins.length?sapBins:b.slice();
+  zoneBins=b.slice();
   if(!zoneBins.length){toast('No bins in '+zone,'amb');return;}
   binIdx=0;
   document.getElementById('screen-aisle').style.display='none';
