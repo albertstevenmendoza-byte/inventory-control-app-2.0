@@ -781,7 +781,7 @@ function buildGrid(gid,zones){
     btn.style.animation='cardIn .3s var(--ease) both';
     btn.style.animationDelay=(zi*0.025)+'s';
     btn.innerHTML=(active?'<span class="zb-live" title="Someone is counting here now"></span>':'')+'<span class="zb-name" style="'+(disp.length>3?'font-size:9px;':'')+'">'+ esc(disp)+'</span><span class="zb-count">'+(sapBins.length>0?done+'/'+sapBins.length:bins.length+' bins')+'</span><div class="zb-prog" style="width:'+pct+'%"></div>';
-    btn.onclick=()=>selectZone(z,bins);
+    btn.onclick=()=>selectZone(z);
     grid.appendChild(btn);
   });
 }
@@ -801,7 +801,7 @@ function buildProgressGrid(){
       const disp=ZONE_DISPLAY[z]||z;
       const activeUsers=[...new Set(bins.flatMap(b=>livePresence[b]||[]))];
       const live=activeUsers.length>0;
-      return '<div class="prog-tile'+(allDone?' done':partial?' partial':'')+'" onclick="showPage(\'cc\');selectZone(\''+z+'\','+JSON.stringify(ALL_BINS[z])+')" '+(live?'title="'+esc(activeUsers.join(', '))+' counting now"':'')+'>'
+      return '<div class="prog-tile'+(allDone?' done':partial?' partial':'')+'" onclick="showPage(\'cc\');selectZone(\''+z+'\')" '+(live?'title="'+esc(activeUsers.join(', '))+' counting now"':'')+'>'
         +(live?'<span class="zb-live"></span>':'')
         +'<div class="pt-name" style="'+(disp.length>3?'font-size:10px;':'')+'">'+esc(disp)+'</div>'
         +'<div class="pt-pct">'+pct+'% · '+done+'/'+total+'</div>'
@@ -1139,12 +1139,11 @@ function promptName(){document.getElementById('name-inp').value=userName;documen
 function saveName(){const n=document.getElementById('name-inp').value.trim();if(!n)return;userName=n;localStorage.setItem('novus_name',n);document.getElementById('name-disp').textContent=n;closeModal('name-modal');toast('Welcome, '+n+'!','grn');}
 document.getElementById('name-inp').addEventListener('keydown',e=>{if(e.key==='Enter')saveName();});
 
-function selectZone(zone,bins){
+function selectZone(zone){
   if(!userName){promptName();return;}
   if(!sapData.length){toast('Upload SAP data first','amb');return;}
   activeZone=zone;
-  const b=bins||ALL_BINS[zone]||[];
-  zoneBins=b.slice();
+  zoneBins=(ALL_BINS[zone]||[]).slice();
   if(!zoneBins.length){toast('No bins in '+zone,'amb');return;}
   binIdx=0;
   document.getElementById('screen-aisle').style.display='none';
